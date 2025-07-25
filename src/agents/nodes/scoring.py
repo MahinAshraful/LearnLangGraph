@@ -115,7 +115,74 @@ class ScoringNode(BaseNode):
             restaurant, user_preferences, collaborative_restaurants
         )
 
+        # Populate component fields for reasoning and confidence calculations
+        self._populate_component_scores(score_breakdown, restaurant, parsed_query,
+                                        user_preferences, similar_users, collaborative_restaurants)
+
         return score_breakdown
+
+    def _populate_component_scores(self, score_breakdown: ScoreBreakdown, restaurant: Restaurant,
+                                   parsed_query: ParsedQuery, user_preferences: Optional[UserPreferences],
+                                   similar_users: List[UserPreferences], collaborative_restaurants: List[str]):
+        """Populate individual component scores for reasoning and confidence"""
+
+        # Cuisine match
+        score_breakdown.cuisine_match = 0.0
+        if parsed_query.cuisine_preferences:
+            for cuisine in parsed_query.cuisine_preferences:
+                if restaurant.matches_category(cuisine):
+                    score_breakdown.cuisine_match = 1.0
+                    break
+
+        # Price match
+        score_breakdown.price_match = 0.0
+        if parsed_query.price_preferences and restaurant.price_level:
+            if restaurant.price_level in parsed_query.price_preferences:
+                score_breakdown.price_match = 1.0
+        elif user_preferences and user_preferences.preferred_price_levels and restaurant.price_level:
+            if restaurant.price_level in user_preferences.preferred_price_levels:
+                score_breakdown.price_match = 0.8
+
+        # Rating score
+        score_breakdown.rating_score = 0.0
+        if restaurant.rating > 0:
+            score_breakdown.rating_score = min((restaurant.rating - 1) / 4, 1.0)
+
+        # Popularity score
+        score_breakdown.popularity_score = 0.0
+        if restaurant.user_ratings_total > 0:
+            score_breakdown.popularity_score = min(math.log(restaurant.user_ratings_total + 1) / math.log(1000), 1.0)
+
+        # Collaborative score
+        score_breakdown.collaborative_score = 0.0
+        score_breakdown.similar_users_count = len(similar_users)
+        if restaurant.place_id in collaborative_restaurants:
+            score_breakdown.collaborative_score = 0.8
+
+        # Time appropriateness
+        score_breakdown.time_appropriateness = 0.7  # Default
+        if parsed_query.time_preference.urgency == "now":
+            score_breakdown.time_appropriateness = 1.0 if restaurant.is_open_now else 0.2
+        elif parsed_query.time_preference.urgency == "soon":
+            score_breakdown.time_appropriateness = 0.9 if restaurant.is_open_now else 0.6
+
+        # Feature match
+        score_breakdown.feature_match = 0.5  # Default neutral
+        if parsed_query.required_features:
+            matched_features = sum(1 for feature in parsed_query.required_features
+                                   if self._restaurant_has_feature(restaurant, feature))
+            score_breakdown.feature_match = matched_features / len(parsed_query.required_features)
+
+        # Occasion match
+        score_breakdown.occasion_match = 0.7  # Default neutral
+        occasion = parsed_query.social_context.occasion
+        if occasion:
+            if "date" in occasion.lower() or "romantic" in occasion.lower():
+                score_breakdown.occasion_match = 0.9 if restaurant.features.romantic else 0.5
+            elif "business" in occasion.lower():
+                score_breakdown.occasion_match = 0.9 if "upscale" in str(restaurant.features) else 0.6
+            elif "family" in occasion.lower():
+                score_breakdown.occasion_match = 0.9 if restaurant.features.good_for_kids else 0.4
 
     def _calculate_preference_score(self,
                                     restaurant: Restaurant,
@@ -157,8 +224,6 @@ class ScoringNode(BaseNode):
         collaborative_score = 0.0
         if restaurant.place_id in collaborative_restaurants:
             collaborative_score = 0.8
-            score_breakdown.collaborative_score = collaborative_score
-            score_breakdown.similar_users_count = len(similar_users)
 
         # Combine preference components
         total_score = (
@@ -168,11 +233,100 @@ class ScoringNode(BaseNode):
                 collaborative_score * 0.10
         )
 
-        # Store component scores
-        score_breakdown.rating_score = rating_score
-        score_breakdown.popularity_score = popularity_score
+        return min(total_score, 1.0)
+
+    def _calculate_context_score(self, restaurant: Restaurant, parsed_query: ParsedQuery) -> float:
+        """Calculate contextual relevance score (30% of total)"""
+
+        total_score = 0.0
+
+        # Time appropriateness (40% of context score)
+        time_score = 0.0
+        if parsed_query.time_preference.urgency == "now":
+            # High priority for open restaurants
+            time_score = 1.0 if restaurant.is_open_now else 0.2
+        elif parsed_query.time_preference.urgency == "soon":
+            time_score = 0.9 if restaurant.is_open_now else 0.6
+        else:
+            time_score = 0.7  # Default for planning
+
+        # Feature match (35% of context score)
+        feature_score = 0.0
+        if parsed_query.required_features:
+            matched_features = 0
+            for feature in parsed_query.required_features:
+                if self._restaurant_has_feature(restaurant, feature):
+                    matched_features += 1
+
+            feature_score = matched_features / len(parsed_query.required_features)
+        else:
+            feature_score = 0.5  # Neutral if no specific features required
+
+        # Party size appropriateness (15% of context score)
+        party_size_score = 0.0
+        party_size = parsed_query.social_context.party_size
+
+        if party_size <= 2:
+            party_size_score = 1.0  # Most restaurants handle couples
+        elif party_size <= 4:
+            party_size_score = 0.9  # Most restaurants handle small groups
+        elif party_size <= 8:
+            party_size_score = 0.7 if restaurant.features.good_for_groups else 0.5
+        else:
+            party_size_score = 0.8 if restaurant.features.good_for_groups else 0.3
+
+        # Occasion match (10% of context score)
+        occasion_score = 0.0
+        occasion = parsed_query.social_context.occasion
+
+        if occasion:
+            if "date" in occasion.lower() or "romantic" in occasion.lower():
+                occasion_score = 0.9 if restaurant.features.romantic else 0.5
+            elif "business" in occasion.lower():
+                occasion_score = 0.9 if "upscale" in str(restaurant.features) else 0.6
+            elif "family" in occasion.lower():
+                occasion_score = 0.9 if restaurant.features.good_for_kids else 0.4
+            else:
+                occasion_score = 0.7  # Default for other occasions
+        else:
+            occasion_score = 0.7  # Neutral if no specific occasion
+
+        # Combine context components
+        total_score = (
+                time_score * 0.40 +
+                feature_score * 0.35 +
+                party_size_score * 0.15 +
+                occasion_score * 0.10
+        )
 
         return min(total_score, 1.0)
+
+    def _calculate_quality_score(self, restaurant: Restaurant) -> float:
+        """Calculate restaurant quality score (15% of total)"""
+
+        # Rating component (70% of quality score)
+        rating_score = 0.0
+        if restaurant.rating > 0:
+            # Normalize 1-5 rating to 0-1, with 4.0+ being excellent
+            rating_score = min((restaurant.rating - 1) / 4, 1.0)
+
+            # Boost for high ratings
+            if restaurant.rating >= 4.5:
+                rating_score = min(rating_score * 1.1, 1.0)
+
+        # Popularity component (30% of quality score)
+        popularity_score = 0.0
+        if restaurant.user_ratings_total > 0:
+            # Log scale for review count (diminishing returns)
+            popularity_score = min(math.log(restaurant.user_ratings_total + 1) / math.log(1000), 1.0)
+
+        # Combine quality components
+        total_score = (
+                rating_score * 0.70 +
+                popularity_score * 0.30
+        )
+
+        return total_score
 
     def _calculate_boost_score(self,
                                restaurant: Restaurant,
@@ -384,110 +538,7 @@ class ScoringNode(BaseNode):
 
     def get_scoring_stats(self) -> Dict[str, Any]:
         """Get statistics about scoring performance"""
-
         return {
             "scoring_weights": SCORING_WEIGHTS,
             **self.get_performance_stats()
-        }.cuisine_match = cuisine_score
-        score_breakdown.price_match = price_score
-
-        return min(total_score, 1.0)
-
-    def _calculate_context_score(self, restaurant: Restaurant, parsed_query: ParsedQuery) -> float:
-        """Calculate contextual relevance score (30% of total)"""
-
-        total_score = 0.0
-
-        # Time appropriateness (40% of context score)
-        time_score = 0.0
-        if parsed_query.time_preference.urgency == "now":
-            # High priority for open restaurants
-            time_score = 1.0 if restaurant.is_open_now else 0.2
-        elif parsed_query.time_preference.urgency == "soon":
-            time_score = 0.9 if restaurant.is_open_now else 0.6
-        else:
-            time_score = 0.7  # Default for planning
-
-        # Feature match (35% of context score)
-        feature_score = 0.0
-        if parsed_query.required_features:
-            matched_features = 0
-            for feature in parsed_query.required_features:
-                if self._restaurant_has_feature(restaurant, feature):
-                    matched_features += 1
-
-            feature_score = matched_features / len(parsed_query.required_features)
-        else:
-            feature_score = 0.5  # Neutral if no specific features required
-
-        # Party size appropriateness (15% of context score)
-        party_size_score = 0.0
-        party_size = parsed_query.social_context.party_size
-
-        if party_size <= 2:
-            party_size_score = 1.0  # Most restaurants handle couples
-        elif party_size <= 4:
-            party_size_score = 0.9  # Most restaurants handle small groups
-        elif party_size <= 8:
-            party_size_score = 0.7 if restaurant.features.good_for_groups else 0.5
-        else:
-            party_size_score = 0.8 if restaurant.features.good_for_groups else 0.3
-
-        # Occasion match (10% of context score)
-        occasion_score = 0.0
-        occasion = parsed_query.social_context.occasion
-
-        if occasion:
-            if "date" in occasion.lower() or "romantic" in occasion.lower():
-                occasion_score = 0.9 if restaurant.features.romantic else 0.5
-            elif "business" in occasion.lower():
-                occasion_score = 0.9 if "upscale" in str(restaurant.features) else 0.6
-            elif "family" in occasion.lower():
-                occasion_score = 0.9 if restaurant.features.good_for_kids else 0.4
-            else:
-                occasion_score = 0.7  # Default for other occasions
-        else:
-            occasion_score = 0.7  # Neutral if no specific occasion
-
-        # Combine context components
-        total_score = (
-                time_score * 0.40 +
-                feature_score * 0.35 +
-                party_size_score * 0.15 +
-                occasion_score * 0.10
-        )
-
-        # Store component scores
-        score_breakdown.time_appropriateness = time_score
-        score_breakdown.feature_match = feature_score
-        score_breakdown.occasion_match = occasion_score
-
-        return min(total_score, 1.0)
-
-    def _calculate_quality_score(self, restaurant: Restaurant) -> float:
-        """Calculate restaurant quality score (15% of total)"""
-
-        # Rating component (70% of quality score)
-        rating_score = 0.0
-        if restaurant.rating > 0:
-            # Normalize 1-5 rating to 0-1, with 4.0+ being excellent
-            rating_score = min((restaurant.rating - 1) / 4, 1.0)
-
-            # Boost for high ratings
-            if restaurant.rating >= 4.5:
-                rating_score = min(rating_score * 1.1, 1.0)
-
-        # Popularity component (30% of quality score)
-        popularity_score = 0.0
-        if restaurant.user_ratings_total > 0:
-            # Log scale for review count (diminishing returns)
-            popularity_score = min(math.log(restaurant.user_ratings_total + 1) / math.log(1000), 1.0)
-
-        # Combine quality components
-        total_score = (
-                rating_score * 0.70 +
-                popularity_score * 0.30
-        )
-
-        # Store component scores
-        score_breakdown
+        }
