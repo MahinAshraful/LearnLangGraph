@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import logging
 
 from .base_node import BaseNode
-from ..state.recommendation_state import RecommendationState
+from ..recommendation_state import RecommendationState
 from ...models.restaurant import Restaurant
 from ...models.query import ParsedQuery
 from ...models.user import UserPreferences

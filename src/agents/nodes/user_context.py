@@ -2,7 +2,7 @@ from typing import Dict, Any, List
 import logging
 
 from .base_node import BaseNode
-from ..state.recommendation_state import RecommendationState
+from ..recommendation_state import RecommendationState
 from ...infrastructure.databases.vector_db.base import VectorDBAdapter
 from ...domain.models.user import UserPreferences, User
 from ...domain.models.query import QueryContext

@@ -3,7 +3,7 @@ from typing import Dict, Any, List, Optional
 import logging
 
 from .base_node import BaseNode
-from ..state.recommendation_state import RecommendationState
+from ..recommendation_state import RecommendationState
 from ...infrastructure.api_clients.google_places.client import GooglePlacesClient, NearbySearchRequest
 from ...models.restaurant import Restaurant, RestaurantCategory
 from ...models.common import Location

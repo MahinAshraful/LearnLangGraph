@@ -3,7 +3,7 @@ import logging
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 
-from ..state.recommendation_state import RecommendationState
+from ..recommendation_state import RecommendationState
 from ...config.settings import get_settings
 
 logger = logging.getLogger(__name__)

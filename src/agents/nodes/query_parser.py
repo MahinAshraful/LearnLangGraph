@@ -3,7 +3,7 @@ from typing import Dict, Any, List
 import logging
 
 from .base_node import BaseNode
-from ..state.recommendation_state import RecommendationState
+from ..recommendation_state import RecommendationState
 from ...infrastructure.api_clients.openai.client import OpenAIClient, ChatMessage
 from ...models.query import ParsedQuery, QueryType, LocationPreference, TimePreference, SocialContext
 from ...models.restaurant import RestaurantCategory, PriceLevel

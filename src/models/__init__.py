@@ -1,6 +1,6 @@
 from .restaurant import Restaurant, RestaurantCategory, PriceLevel, OpeningHours
 from .user import User, UserPreferences, UserActivity, DietaryRestriction
-from .recommendation import Recommendation, ScoredRecommendation, RecommendationContext
+from .recommendation import Recommendation, RecommendationContext
 from .query import ParsedQuery, QueryType, LocationPreference
 from .common import BaseModel, Location, TimeSlot
 
@@ -19,7 +19,6 @@ __all__ = [
 
     # Recommendation models
     "Recommendation",
-    "ScoredRecommendation",
     "RecommendationContext",
 
     # Query models
