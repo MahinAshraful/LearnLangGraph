@@ -1,6 +1,6 @@
 from datetime import datetime, time
 from typing import Any, Dict, Optional, List
-from pydantic import BaseModel as PydanticBaseModel, Field, validator
+from pydantic import BaseModel as PydanticBaseModel, Field, field_validator, model_validator
 from enum import Enum
 import uuid
 
@@ -59,11 +59,11 @@ class TimeSlot(BaseModel):
     end_time: time = Field(..., description="End time")
     day_of_week: Optional[int] = Field(None, ge=0, le=6, description="Day of week (0=Monday)")
 
-    @validator('end_time')
-    def end_after_start(cls, v, values):
-        if 'start_time' in values and v <= values['start_time']:
+    @model_validator(mode='after')
+    def validate_time_order(self):
+        if self.end_time <= self.start_time:
             raise ValueError('End time must be after start time')
-        return v
+        return self
 
     def is_open_at(self, check_time: time) -> bool:
         """Check if this time slot covers the given time"""

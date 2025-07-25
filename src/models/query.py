@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, time
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 
 from .common import BaseModel, Location, Urgency, DistancePreference
 from .restaurant import RestaurantCategory, PriceLevel
@@ -140,12 +140,6 @@ class ParsedQuery(BaseModel):
             data['parsed_at'] = datetime.utcnow()
         super().__init__(**data)
 
-    @validator('party_size')
-    def validate_party_size(cls, v, values):
-        if 'social_context' in values:
-            # Ensure consistency between party_size and social_context
-            return v
-        return v
 
     def to_search_criteria(self) -> Dict[str, Any]:
         """Convert to restaurant search criteria"""

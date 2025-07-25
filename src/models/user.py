@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional, Dict, Any, Set
 from enum import Enum
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 
 from .common import BaseModel, Location, EntityId
 from .restaurant import RestaurantCategory, PriceLevel
@@ -442,9 +442,9 @@ class UserEmbedding(BaseModel):
             data['location_component'] = []
         super().__init__(**data)
 
-    @validator('embedding_vector')
+    @field_validator('embedding_vector')
+    @classmethod
     def validate_embedding_length(cls, v):
-        # OpenAI text-embedding-3-large can be 1536 or 3072 dimensions
         if len(v) not in [1536, 3072]:
             raise ValueError('Embedding vector must be 1536 or 3072 dimensions')
         return v

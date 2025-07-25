@@ -1,7 +1,7 @@
 from datetime import time, datetime
 from typing import List, Optional, Dict, Any
 from enum import Enum
-from pydantic import Field, validator
+from pydantic import Field, field_validator
 
 from .common import BaseModel, Location, TimeSlot, EntityId
 
@@ -203,7 +203,8 @@ class Restaurant(BaseModel):
             data['last_updated'] = datetime.utcnow()
         super().__init__(**data)
 
-    @validator('rating')
+    @field_validator('rating')
+    @classmethod
     def validate_rating(cls, v):
         if v < 0 or v > 5:
             raise ValueError('Rating must be between 0 and 5')
