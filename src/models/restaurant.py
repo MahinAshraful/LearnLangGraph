@@ -69,13 +69,21 @@ class PriceLevel(int, Enum):
 class OpeningHours(BaseModel):
     """Restaurant opening hours"""
 
-    monday: Optional[List[TimeSlot]] = Field(default_factory=list)
-    tuesday: Optional[List[TimeSlot]] = Field(default_factory=list)
-    wednesday: Optional[List[TimeSlot]] = Field(default_factory=list)
-    thursday: Optional[List[TimeSlot]] = Field(default_factory=list)
-    friday: Optional[List[TimeSlot]] = Field(default_factory=list)
-    saturday: Optional[List[TimeSlot]] = Field(default_factory=list)
-    sunday: Optional[List[TimeSlot]] = Field(default_factory=list)
+    monday: Optional[List[TimeSlot]] = Field(description="Monday time slots")
+    tuesday: Optional[List[TimeSlot]] = Field(description="Tuesday time slots")
+    wednesday: Optional[List[TimeSlot]] = Field(description="Wednesday time slots")
+    thursday: Optional[List[TimeSlot]] = Field(description="Thursday time slots")
+    friday: Optional[List[TimeSlot]] = Field(description="Friday time slots")
+    saturday: Optional[List[TimeSlot]] = Field(description="Saturday time slots")
+    sunday: Optional[List[TimeSlot]] = Field(description="Sunday time slots")
+
+    def __init__(self, **data):
+        # Set default empty lists for each day if not provided
+        days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday']
+        for day in days:
+            if day not in data:
+                data[day] = []
+        super().__init__(**data)
 
     def is_open_at(self, check_time: datetime) -> bool:
         """Check if restaurant is open at given datetime"""
@@ -126,17 +134,23 @@ class PopularityData(BaseModel):
                                               description="Current busy percentage")
     typical_wait_time: Optional[int] = Field(None, ge=0,
                                              description="Typical wait time in minutes")
-    peak_hours: List[int] = Field(default_factory=list,
-                                  description="Peak hours (24-hour format)")
+    peak_hours: List[int] = Field(description="Peak hours (24-hour format)")
     is_usually_busy_now: Optional[bool] = None
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(description="Last updated timestamp")
+
+    def __init__(self, **data):
+        if 'peak_hours' not in data:
+            data['peak_hours'] = []
+        if 'last_updated' not in data:
+            data['last_updated'] = datetime.utcnow()
+        super().__init__(**data)
 
 
 class Restaurant(BaseModel):
     """Main restaurant entity - designed for Google Places integration"""
 
     # Core identification
-    id: EntityId = Field(default_factory=EntityId)
+    id: EntityId = Field(description="Unique entity ID")
     place_id: str = Field(..., description="Google Places ID")
     name: str = Field(..., min_length=1, description="Restaurant name")
 
@@ -145,9 +159,8 @@ class Restaurant(BaseModel):
 
     # Categories and type
     primary_category: RestaurantCategory = Field(..., description="Primary cuisine type")
-    secondary_categories: List[RestaurantCategory] = Field(default_factory=list)
-    google_types: List[str] = Field(default_factory=list,
-                                    description="Google Places types")
+    secondary_categories: List[RestaurantCategory] = Field(description="Secondary categories")
+    google_types: List[str] = Field(description="Google Places types")
 
     # Pricing and quality
     price_level: Optional[PriceLevel] = Field(None, description="Price level")
@@ -161,18 +174,34 @@ class Restaurant(BaseModel):
 
     # Operational info
     opening_hours: Optional[OpeningHours] = None
-    features: RestaurantFeatures = Field(default_factory=RestaurantFeatures)
+    features: RestaurantFeatures = Field(description="Restaurant features")
 
     # Real-time data
     popularity: Optional[PopularityData] = None
 
     # Rich content
-    photos: List[str] = Field(default_factory=list, description="Photo URLs")
+    photos: List[str] = Field(description="Photo URLs")
     reviews_summary: Optional[str] = Field(None, description="AI-generated review summary")
 
     # Metadata
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(description="Last updated timestamp")
     data_source: str = Field(default="google_places", description="Data source")
+
+    def __init__(self, **data):
+        # Set defaults for mutable fields
+        if 'id' not in data:
+            data['id'] = EntityId()
+        if 'secondary_categories' not in data:
+            data['secondary_categories'] = []
+        if 'google_types' not in data:
+            data['google_types'] = []
+        if 'features' not in data:
+            data['features'] = RestaurantFeatures()
+        if 'photos' not in data:
+            data['photos'] = []
+        if 'last_updated' not in data:
+            data['last_updated'] = datetime.utcnow()
+        super().__init__(**data)
 
     @validator('rating')
     def validate_rating(cls, v):
@@ -238,12 +267,21 @@ class RestaurantSearchCriteria(BaseModel):
 
     location: Location
     radius_km: float = Field(default=5.0, ge=0.1, le=50)
-    categories: List[RestaurantCategory] = Field(default_factory=list)
+    categories: List[RestaurantCategory] = Field(description="Restaurant categories")
     min_rating: float = Field(default=0.0, ge=0, le=5)
-    price_levels: List[PriceLevel] = Field(default_factory=list)
+    price_levels: List[PriceLevel] = Field(description="Price levels")
     must_be_open: bool = True
-    required_features: List[str] = Field(default_factory=list)
+    required_features: List[str] = Field(description="Required features")
     max_results: int = Field(default=20, ge=1, le=100)
+
+    def __init__(self, **data):
+        if 'categories' not in data:
+            data['categories'] = []
+        if 'price_levels' not in data:
+            data['price_levels'] = []
+        if 'required_features' not in data:
+            data['required_features'] = []
+        super().__init__(**data)
 
     def matches_restaurant(self, restaurant: Restaurant) -> bool:
         """Check if restaurant matches these criteria"""

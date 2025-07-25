@@ -4,11 +4,11 @@ import logging
 
 from .base_node import BaseNode
 from ..state.recommendation_state import RecommendationState
-from ...domain.models.restaurant import Restaurant
-from ...domain.models.user import UserPreferences
-from ...domain.models.query import ParsedQuery
-from ...domain.models.recommendation import Recommendation, ScoreBreakdown, RecommendationReason
-from ...domain.models.common import EntityId
+from ...models.restaurant import Restaurant
+from ...models.user import UserPreferences
+from ...models.query import ParsedQuery
+from ...models.recommendation import Recommendation, ScoreBreakdown, RecommendationReason
+from ...models.common import EntityId
 from ...config.constants import SCORING_WEIGHTS
 
 logger = logging.getLogger(__name__)

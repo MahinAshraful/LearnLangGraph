@@ -5,9 +5,9 @@ import logging
 from .base_node import BaseNode
 from ..state.recommendation_state import RecommendationState
 from ...infrastructure.api_clients.google_places.client import GooglePlacesClient, NearbySearchRequest
-from ...domain.models.restaurant import Restaurant, RestaurantCategory
-from ...domain.models.common import Location
-from ...domain.models.query import ParsedQuery
+from ...models.restaurant import Restaurant, RestaurantCategory
+from ...models.common import Location
+from ...models.query import ParsedQuery
 from ...config.constants import DEFAULT_SEARCH_RADIUS_KM
 
 logger = logging.getLogger(__name__)

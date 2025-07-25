@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, time
 from typing import List, Optional, Dict, Any
 from enum import Enum
@@ -28,22 +29,29 @@ class LocationPreference(BaseModel):
     """Specific location preferences for the query"""
 
     center_location: Optional[Location] = None
-    preferred_neighborhoods: List[str] = Field(default_factory=list)
+    preferred_neighborhoods: List[str] = Field(description="Preferred neighborhoods")
     distance_preference: DistancePreference = DistancePreference.NEARBY
     max_distance_km: float = Field(default=10.0, ge=0.1, le=100)
-    avoid_areas: List[str] = Field(default_factory=list)
+    avoid_areas: List[str] = Field(description="Areas to avoid")
 
     # Transportation considerations
     has_car: bool = True
     prefers_public_transit: bool = False
     walking_only: bool = False
 
+    def __init__(self, **data):
+        if 'preferred_neighborhoods' not in data:
+            data['preferred_neighborhoods'] = []
+        if 'avoid_areas' not in data:
+            data['avoid_areas'] = []
+        super().__init__(**data)
+
 
 class TimePreference(BaseModel):
     """Time-related preferences for dining"""
 
     preferred_time: Optional[time] = None
-    meal_type: Optional[str] = Field(None, regex="^(breakfast|brunch|lunch|dinner|late_night)$")
+    meal_type: Optional[str] = Field(None, pattern="^(breakfast|brunch|lunch|dinner|late_night)$")
     urgency: Urgency = Urgency.PLANNING
     flexible_timing: bool = True
     avoid_wait_times: bool = False
@@ -55,9 +63,16 @@ class SocialContext(BaseModel):
 
     party_size: int = Field(default=2, ge=1, le=20)
     occasion: Optional[str] = None
-    companion_types: List[str] = Field(default_factory=list)  # family, friends, business, date
+    companion_types: List[str] = Field(description="Family, friends, business, date")
     celebration: Optional[str] = None  # birthday, anniversary, etc.
-    special_needs: List[str] = Field(default_factory=list)  # wheelchair, high chair, etc.
+    special_needs: List[str] = Field(description="Wheelchair, high chair, etc.")
+
+    def __init__(self, **data):
+        if 'companion_types' not in data:
+            data['companion_types'] = []
+        if 'special_needs' not in data:
+            data['special_needs'] = []
+        super().__init__(**data)
 
 
 class ParsedQuery(BaseModel):
@@ -69,20 +84,20 @@ class ParsedQuery(BaseModel):
     confidence: float = Field(default=1.0, ge=0, le=1, description="Parsing confidence")
 
     # Core preferences extracted
-    cuisine_preferences: List[RestaurantCategory] = Field(default_factory=list)
-    price_preferences: List[PriceLevel] = Field(default_factory=list)
-    dietary_requirements: List[DietaryRestriction] = Field(default_factory=list)
-    ambiance_preferences: List[AmbiancePreference] = Field(default_factory=list)
+    cuisine_preferences: List[RestaurantCategory] = Field(description="Preferred cuisines")
+    price_preferences: List[PriceLevel] = Field(description="Price preferences")
+    dietary_requirements: List[DietaryRestriction] = Field(description="Dietary restrictions")
+    ambiance_preferences: List[AmbiancePreference] = Field(description="Ambiance preferences")
 
     # Context
-    location_preference: LocationPreference = Field(default_factory=LocationPreference)
-    time_preference: TimePreference = Field(default_factory=TimePreference)
-    social_context: SocialContext = Field(default_factory=SocialContext)
+    location_preference: LocationPreference = Field(description="Location preferences")
+    time_preference: TimePreference = Field(description="Time preferences")
+    social_context: SocialContext = Field(description="Social context")
 
     # Features and requirements
-    required_features: List[str] = Field(default_factory=list)  # outdoor_seating, live_music, etc.
-    nice_to_have_features: List[str] = Field(default_factory=list)
-    deal_breakers: List[str] = Field(default_factory=list)
+    required_features: List[str] = Field(description="Required features")
+    nice_to_have_features: List[str] = Field(description="Nice to have features")
+    deal_breakers: List[str] = Field(description="Deal breakers")
 
     # Quality preferences
     min_rating: float = Field(default=0.0, ge=0, le=5)
@@ -92,13 +107,38 @@ class ParsedQuery(BaseModel):
     # Output preferences
     max_results: int = Field(default=10, ge=1, le=50)
     sort_preference: str = Field(default="relevance",
-                                 regex="^(relevance|rating|distance|price|popularity)$")
+                                 pattern="^(relevance|rating|distance|price|popularity)$")
 
     # Metadata
-    parsed_at: datetime = Field(default_factory=datetime.utcnow)
+    parsed_at: datetime = Field(description="Parse timestamp")
     language: str = Field(default="en")
     user_id: Optional[str] = None
     session_id: Optional[str] = None
+
+    def __init__(self, **data):
+        if 'cuisine_preferences' not in data:
+            data['cuisine_preferences'] = []
+        if 'price_preferences' not in data:
+            data['price_preferences'] = []
+        if 'dietary_requirements' not in data:
+            data['dietary_requirements'] = []
+        if 'ambiance_preferences' not in data:
+            data['ambiance_preferences'] = []
+        if 'location_preference' not in data:
+            data['location_preference'] = LocationPreference()
+        if 'time_preference' not in data:
+            data['time_preference'] = TimePreference()
+        if 'social_context' not in data:
+            data['social_context'] = SocialContext()
+        if 'required_features' not in data:
+            data['required_features'] = []
+        if 'nice_to_have_features' not in data:
+            data['nice_to_have_features'] = []
+        if 'deal_breakers' not in data:
+            data['deal_breakers'] = []
+        if 'parsed_at' not in data:
+            data['parsed_at'] = datetime.utcnow()
+        super().__init__(**data)
 
     @validator('party_size')
     def validate_party_size(cls, v, values):
@@ -164,16 +204,23 @@ class QueryIntent(BaseModel):
     """High-level intent classification for query routing"""
 
     primary_intent: QueryType
-    secondary_intents: List[QueryType] = Field(default_factory=list)
+    secondary_intents: List[QueryType] = Field(description="Secondary intents")
     confidence: float = Field(..., ge=0, le=1)
 
     # Intent-specific data
-    entities: Dict[str, Any] = Field(default_factory=dict)
-    sentiment: str = Field(default="neutral", regex="^(positive|neutral|negative)$")
+    entities: Dict[str, Any] = Field(description="Extracted entities")
+    sentiment: str = Field(default="neutral", pattern="^(positive|neutral|negative)$")
 
     # Processing hints
     use_cache: bool = True
-    priority: str = Field(default="normal", regex="^(low|normal|high|urgent)$")
+    priority: str = Field(default="normal", pattern="^(low|normal|high|urgent)$")
+
+    def __init__(self, **data):
+        if 'secondary_intents' not in data:
+            data['secondary_intents'] = []
+        if 'entities' not in data:
+            data['entities'] = {}
+        super().__init__(**data)
 
     @classmethod
     def from_query_text(cls, query_text: str) -> 'QueryIntent':
@@ -210,23 +257,34 @@ class QueryContext(BaseModel):
 
     user_id: str
     session_id: str
-    device_type: str = Field(default="web", regex="^(web|mobile|tablet|voice)$")
+    device_type: str = Field(default="web", pattern="^(web|mobile|tablet|voice)$")
 
     # User context
     user_location: Optional[Location] = None
-    time_of_query: datetime = Field(default_factory=datetime.utcnow)
+    time_of_query: datetime = Field(description="Query timestamp")
 
     # Conversation context
-    previous_queries: List[str] = Field(default_factory=list)
-    conversation_history: List[Dict[str, Any]] = Field(default_factory=list)
+    previous_queries: List[str] = Field(description="Previous queries")
+    conversation_history: List[Dict[str, Any]] = Field(description="Conversation history")
 
     # External context
     weather_condition: Optional[str] = None
-    local_events: List[Dict[str, Any]] = Field(default_factory=list)
+    local_events: List[Dict[str, Any]] = Field(description="Local events")
 
     # Personalization hints
     use_personalization: bool = True
     include_social_signals: bool = True
+
+    def __init__(self, **data):
+        if 'time_of_query' not in data:
+            data['time_of_query'] = datetime.utcnow()
+        if 'previous_queries' not in data:
+            data['previous_queries'] = []
+        if 'conversation_history' not in data:
+            data['conversation_history'] = []
+        if 'local_events' not in data:
+            data['local_events'] = []
+        super().__init__(**data)
 
     def add_to_history(self, query: str, result_count: int):
         """Add query to conversation history"""
@@ -247,7 +305,7 @@ class QueryContext(BaseModel):
 class QueryResult(BaseModel):
     """Results from query processing"""
 
-    query_id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    query_id: str = Field(description="Unique query identifier")
     parsed_query: ParsedQuery
     query_context: QueryContext
 
@@ -257,7 +315,7 @@ class QueryResult(BaseModel):
     confidence: float = Field(..., ge=0, le=1)
 
     # Results
-    restaurant_ids: List[str] = Field(default_factory=list)
+    restaurant_ids: List[str] = Field(description="Restaurant IDs")
     total_results: int = 0
 
     # Reasoning
@@ -269,4 +327,13 @@ class QueryResult(BaseModel):
     tokens_used: int = 0
     cost_estimate: float = 0.0
 
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(description="Creation timestamp")
+
+    def __init__(self, **data):
+        if 'query_id' not in data:
+            data['query_id'] = str(uuid.uuid4())
+        if 'restaurant_ids' not in data:
+            data['restaurant_ids'] = []
+        if 'created_at' not in data:
+            data['created_at'] = datetime.utcnow()
+        super().__init__(**data)

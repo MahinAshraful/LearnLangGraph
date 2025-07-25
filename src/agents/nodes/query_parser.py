@@ -5,10 +5,10 @@ import logging
 from .base_node import BaseNode
 from ..state.recommendation_state import RecommendationState
 from ...infrastructure.api_clients.openai.client import OpenAIClient, ChatMessage
-from ...domain.models.query import ParsedQuery, QueryType, LocationPreference, TimePreference, SocialContext
-from ...domain.models.restaurant import RestaurantCategory, PriceLevel
-from ...domain.models.user import DietaryRestriction, AmbiancePreference
-from ...domain.models.common import Urgency, DistancePreference
+from ...models.query import ParsedQuery, QueryType, LocationPreference, TimePreference, SocialContext
+from ...models.restaurant import RestaurantCategory, PriceLevel
+from ...models.user import DietaryRestriction, AmbiancePreference
+from ...models.common import Urgency, DistancePreference
 from ...config.constants import CUISINE_KEYWORDS, PRICE_KEYWORDS, AMBIANCE_KEYWORDS, FEATURE_KEYWORDS
 
 logger = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ from typing import Dict, Any, Optional
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 
-from ..state.recommendation_state import RecommendationState
+from ..recommendation_state import RecommendationState
 from ..nodes.query_parser import QueryParserNode
 from ..nodes.user_context import UserContextNode
 from ..nodes.data_retrieval import DataRetrievalNode
@@ -405,7 +405,7 @@ async def demo_workflow():
                 recommendation = rec["recommendation"]
 
                 print(f"  {rec['rank']}. {restaurant['name']} ({restaurant['cuisine']})")
-                print(f"     ⭐ {restaurant['rating']}/5 | {restaurant.get('price_symbol', ')} | Score: {recommendation['score']}")
+                print(f"     ⭐ {restaurant['rating']}/5 | {restaurant.get('price_symbol', '$')} | Score: {recommendation['score']}")
                 print(f"     💡 {recommendation['explanation']}")
 
             print(f"\n⚡ Performance:")

@@ -3,7 +3,7 @@ import logging
 
 from .base_node import BaseNode
 from ..state.recommendation_state import RecommendationState
-from ...domain.models.recommendation import Recommendation
+from ...models.recommendation import Recommendation
 
 logger = logging.getLogger(__name__)
 

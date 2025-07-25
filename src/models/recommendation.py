@@ -325,7 +325,7 @@ class RecommendationFeedback(BaseModel):
     user_id: str
 
     # Feedback type
-    feedback_type: str = Field(..., regex="^(view|click|like|dislike|book|visit|share)$")
+    feedback_type: str = Field(..., pattern="^(view|click|like|dislike|book|visit|share)$")
     rating: Optional[int] = Field(None, ge=1, le=5, description="User rating")
 
     # Detailed feedback

@@ -1,11 +1,11 @@
 from typing import List, Dict, Any, Optional, TypedDict
 from datetime import datetime
 
-from ...domain.models.restaurant import Restaurant
-from ...domain.models.user import User, UserPreferences
-from ...domain.models.query import ParsedQuery, QueryContext
-from ...domain.models.recommendation import Recommendation, RecommendationContext, ScoreBreakdown
-from ...domain.models.common import Location
+from ..models.restaurant import Restaurant
+from ..models.user import User, UserPreferences
+from ..models.query import ParsedQuery, QueryContext
+from ..models.recommendation import Recommendation, RecommendationContext, ScoreBreakdown
+from ..models.common import Location
 
 
 class RecommendationState(TypedDict):

@@ -8,13 +8,11 @@ import uuid
 class BaseModel(PydanticBaseModel):
     """Base model with common functionality"""
 
-    class Config:
-        # Enable validation on assignment
-        validate_assignment = True
-        # Use enum values instead of enum names
-        use_enum_values = True
-        # Allow population by field name or alias
-        allow_population_by_field_name = True
+    model_config = {
+        "validate_assignment": True,
+        "use_enum_values": True,
+        "populate_by_name": True  # renamed from allow_population_by_field_name
+    }
 
 
 class Location(BaseModel):
@@ -122,9 +120,15 @@ class Score(BaseModel):
     """Represents a score with components for transparency"""
 
     total: float = Field(..., ge=0, le=1, description="Total score")
-    components: Dict[str, float] = Field(default_factory=dict, description="Score breakdown")
+    components: Dict[str, float] = Field(description="Score breakdown")
     confidence: float = Field(default=1.0, ge=0, le=1, description="Confidence in score")
     reasoning: Optional[str] = Field(None, description="Human-readable reasoning")
+
+    def __init__(self, **data):
+        # Set default for components if not provided
+        if 'components' not in data:
+            data['components'] = {}
+        super().__init__(**data)
 
     def add_component(self, name: str, value: float, weight: float = 1.0) -> None:
         """Add a score component"""
@@ -141,11 +145,18 @@ class Feedback(BaseModel):
 
     user_id: str
     recommendation_id: str
-    feedback_type: str = Field(..., regex="^(like|dislike|clicked|booked|visited)$")
+    feedback_type: str = Field(..., pattern="^(like|dislike|clicked|booked|visited)$")
     rating: Optional[int] = Field(None, ge=1, le=5)
     comment: Optional[str] = None
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = Field(default_factory=dict)
+    timestamp: datetime = Field(description="Timestamp of feedback")
+    metadata: Dict[str, Any] = Field(description="Additional metadata")
+
+    def __init__(self, **data):
+        if 'timestamp' not in data:
+            data['timestamp'] = datetime.utcnow()
+        if 'metadata' not in data:
+            data['metadata'] = {}
+        super().__init__(**data)
 
 
 class CacheKey(BaseModel):

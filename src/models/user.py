@@ -59,49 +59,81 @@ class UserPreferences(BaseModel):
     user_id: str = Field(..., description="User identifier")
 
     # Cuisine preferences with weights
-    favorite_cuisines: List[RestaurantCategory] = Field(default_factory=list)
-    disliked_cuisines: List[RestaurantCategory] = Field(default_factory=list)
-    cuisine_weights: Dict[str, float] = Field(default_factory=dict,
-                                              description="Cuisine preference strength")
+    favorite_cuisines: List[RestaurantCategory] = Field(description="Favorite cuisines")
+    disliked_cuisines: List[RestaurantCategory] = Field(description="Disliked cuisines")
+    cuisine_weights: Dict[str, float] = Field(description="Cuisine preference strength")
 
     # Price preferences
-    preferred_price_levels: List[PriceLevel] = Field(default_factory=list)
+    preferred_price_levels: List[PriceLevel] = Field(description="Preferred price levels")
     budget_conscious: bool = False
-    splurge_occasions: List[str] = Field(default_factory=list,
-                                         description="When user splurges")
+    splurge_occasions: List[str] = Field(description="When user splurges")
 
     # Dietary needs
-    dietary_restrictions: List[DietaryRestriction] = Field(default_factory=list)
-    allergies: List[str] = Field(default_factory=list)
+    dietary_restrictions: List[DietaryRestriction] = Field(description="Dietary restrictions")
+    allergies: List[str] = Field(description="Allergies")
 
     # Ambiance and experience
-    preferred_ambiance: List[AmbiancePreference] = Field(default_factory=list)
+    preferred_ambiance: List[AmbiancePreference] = Field(description="Preferred ambiance")
     group_size_preference: Optional[int] = Field(None, ge=1, le=20)
 
     # Location preferences
     home_location: Optional[Location] = None
     work_location: Optional[Location] = None
-    preferred_neighborhoods: List[str] = Field(default_factory=list)
+    preferred_neighborhoods: List[str] = Field(description="Preferred neighborhoods")
     max_travel_distance: float = Field(default=10.0, ge=0.1, le=100,
                                        description="Max travel distance in km")
 
     # Timing preferences
-    preferred_meal_times: Dict[str, str] = Field(default_factory=dict)  # meal -> time_range
-    weekday_vs_weekend_preferences: Dict[str, Any] = Field(default_factory=dict)
+    preferred_meal_times: Dict[str, str] = Field(description="Meal time preferences")
+    weekday_vs_weekend_preferences: Dict[str, Any] = Field(description="Day preferences")
 
     # Feature preferences
-    must_have_features: List[str] = Field(default_factory=list)
-    nice_to_have_features: List[str] = Field(default_factory=list)
+    must_have_features: List[str] = Field(description="Must have features")
+    nice_to_have_features: List[str] = Field(description="Nice to have features")
 
     # Social aspects
-    dining_companions: List[str] = Field(default_factory=list,
-                                         description="Frequent dining companions")
-    occasion_preferences: Dict[str, List[str]] = Field(default_factory=dict)
+    dining_companions: List[str] = Field(description="Frequent dining companions")
+    occasion_preferences: Dict[str, List[str]] = Field(description="Occasion preferences")
 
     # Metadata
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(description="Last updated timestamp")
     confidence_score: float = Field(default=0.0, ge=0, le=1,
                                     description="Confidence in preferences")
+
+    def __init__(self, **data):
+        if 'favorite_cuisines' not in data:
+            data['favorite_cuisines'] = []
+        if 'disliked_cuisines' not in data:
+            data['disliked_cuisines'] = []
+        if 'cuisine_weights' not in data:
+            data['cuisine_weights'] = {}
+        if 'preferred_price_levels' not in data:
+            data['preferred_price_levels'] = []
+        if 'splurge_occasions' not in data:
+            data['splurge_occasions'] = []
+        if 'dietary_restrictions' not in data:
+            data['dietary_restrictions'] = []
+        if 'allergies' not in data:
+            data['allergies'] = []
+        if 'preferred_ambiance' not in data:
+            data['preferred_ambiance'] = []
+        if 'preferred_neighborhoods' not in data:
+            data['preferred_neighborhoods'] = []
+        if 'preferred_meal_times' not in data:
+            data['preferred_meal_times'] = {}
+        if 'weekday_vs_weekend_preferences' not in data:
+            data['weekday_vs_weekend_preferences'] = {}
+        if 'must_have_features' not in data:
+            data['must_have_features'] = []
+        if 'nice_to_have_features' not in data:
+            data['nice_to_have_features'] = []
+        if 'dining_companions' not in data:
+            data['dining_companions'] = []
+        if 'occasion_preferences' not in data:
+            data['occasion_preferences'] = {}
+        if 'last_updated' not in data:
+            data['last_updated'] = datetime.utcnow()
+        super().__init__(**data)
 
     def add_cuisine_preference(self, cuisine: RestaurantCategory, weight: float = 1.0):
         """Add or update cuisine preference"""
@@ -130,7 +162,7 @@ class UserPreferences(BaseModel):
 class UserActivity(BaseModel):
     """Record of user's activity with restaurants"""
 
-    id: EntityId = Field(default_factory=EntityId)
+    id: EntityId = Field(description="Activity ID")
     user_id: str = Field(..., description="User identifier")
     restaurant_id: str = Field(..., description="Restaurant identifier")
     place_id: str = Field(..., description="Google Places ID")
@@ -143,7 +175,7 @@ class UserActivity(BaseModel):
     visit_date: Optional[datetime] = None
     party_size: int = Field(default=1, ge=1, le=20)
     occasion: Optional[str] = None
-    dining_companions: List[str] = Field(default_factory=list)
+    dining_companions: List[str] = Field(description="Dining companions")
 
     # Experience details
     wait_time: Optional[int] = Field(None, ge=0, description="Wait time in minutes")
@@ -153,12 +185,25 @@ class UserActivity(BaseModel):
     value_rating: Optional[int] = Field(None, ge=1, le=5)
 
     # Photos and content
-    photos: List[str] = Field(default_factory=list)
-    tags: List[str] = Field(default_factory=list)
+    photos: List[str] = Field(description="Photo URLs")
+    tags: List[str] = Field(description="Activity tags")
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(description="Creation timestamp")
     source: str = Field(default="app", description="How activity was recorded")
+
+    def __init__(self, **data):
+        if 'id' not in data:
+            data['id'] = EntityId()
+        if 'dining_companions' not in data:
+            data['dining_companions'] = []
+        if 'photos' not in data:
+            data['photos'] = []
+        if 'tags' not in data:
+            data['tags'] = []
+        if 'created_at' not in data:
+            data['created_at'] = datetime.utcnow()
+        super().__init__(**data)
 
     @property
     def is_positive(self) -> bool:
@@ -197,7 +242,7 @@ class UserActivity(BaseModel):
 class User(BaseModel):
     """Main user entity"""
 
-    id: EntityId = Field(default_factory=EntityId)
+    id: EntityId = Field(description="User entity ID")
     user_id: str = Field(..., description="External user identifier")
 
     # Basic info
@@ -205,32 +250,53 @@ class User(BaseModel):
     email: Optional[str] = None
 
     # Preferences and profile
-    preferences: UserPreferences = Field(default_factory=lambda: UserPreferences(user_id=""))
+    preferences: UserPreferences = Field(description="User preferences")
 
     # Activity history
-    recent_activities: List[UserActivity] = Field(default_factory=list)
-    favorite_restaurants: Set[str] = Field(default_factory=set)
-    disliked_restaurants: Set[str] = Field(default_factory=set)
+    recent_activities: List[UserActivity] = Field(description="Recent activities")
+    favorite_restaurants: Set[str] = Field(description="Favorite restaurant IDs")
+    disliked_restaurants: Set[str] = Field(description="Disliked restaurant IDs")
 
     # Social connections (for future collaborative filtering)
-    friends: Set[str] = Field(default_factory=set)
-    following: Set[str] = Field(default_factory=set)
+    friends: Set[str] = Field(description="Friend user IDs")
+    following: Set[str] = Field(description="Following user IDs")
 
     # Usage patterns
     total_recommendations_requested: int = Field(default=0)
     total_restaurants_visited: int = Field(default=0)
-    last_active: datetime = Field(default_factory=datetime.utcnow)
+    last_active: datetime = Field(description="Last active timestamp")
 
     # Privacy settings
     public_profile: bool = Field(default=False)
     share_activity: bool = Field(default=True)
 
     # Metadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(description="Creation timestamp")
+    updated_at: datetime = Field(description="Update timestamp")
 
     def __init__(self, **data):
+        if 'id' not in data:
+            data['id'] = EntityId()
+        if 'preferences' not in data:
+            data['preferences'] = UserPreferences(user_id=data.get('user_id', ''))
+        if 'recent_activities' not in data:
+            data['recent_activities'] = []
+        if 'favorite_restaurants' not in data:
+            data['favorite_restaurants'] = set()
+        if 'disliked_restaurants' not in data:
+            data['disliked_restaurants'] = set()
+        if 'friends' not in data:
+            data['friends'] = set()
+        if 'following' not in data:
+            data['following'] = set()
+        if 'last_active' not in data:
+            data['last_active'] = datetime.utcnow()
+        if 'created_at' not in data:
+            data['created_at'] = datetime.utcnow()
+        if 'updated_at' not in data:
+            data['updated_at'] = datetime.utcnow()
         super().__init__(**data)
+
         # Set user_id in preferences if not set
         if self.preferences.user_id == "":
             self.preferences.user_id = self.user_id
@@ -355,13 +421,26 @@ class UserEmbedding(BaseModel):
     # Metadata for embedding generation
     preferences_hash: str = Field(..., description="Hash of preferences used")
     activity_count: int = Field(default=0, description="Number of activities used")
-    last_updated: datetime = Field(default_factory=datetime.utcnow)
+    last_updated: datetime = Field(description="Last updated timestamp")
 
     # Embedding components breakdown (for debugging/transparency)
-    cuisine_component: List[float] = Field(default_factory=list)
-    price_component: List[float] = Field(default_factory=list)
-    ambiance_component: List[float] = Field(default_factory=list)
-    location_component: List[float] = Field(default_factory=list)
+    cuisine_component: List[float] = Field(description="Cuisine component")
+    price_component: List[float] = Field(description="Price component")
+    ambiance_component: List[float] = Field(description="Ambiance component")
+    location_component: List[float] = Field(description="Location component")
+
+    def __init__(self, **data):
+        if 'last_updated' not in data:
+            data['last_updated'] = datetime.utcnow()
+        if 'cuisine_component' not in data:
+            data['cuisine_component'] = []
+        if 'price_component' not in data:
+            data['price_component'] = []
+        if 'ambiance_component' not in data:
+            data['ambiance_component'] = []
+        if 'location_component' not in data:
+            data['location_component'] = []
+        super().__init__(**data)
 
     @validator('embedding_vector')
     def validate_embedding_length(cls, v):

@@ -3,9 +3,9 @@ import logging
 
 from .base_node import BaseNode
 from ..state.recommendation_state import RecommendationState
-from ...domain.models.restaurant import Restaurant
-from ...domain.models.query import ParsedQuery
-from ...domain.models.user import UserPreferences
+from ...models.restaurant import Restaurant
+from ...models.query import ParsedQuery
+from ...models.user import UserPreferences
 
 logger = logging.getLogger(__name__)
 
