@@ -10,7 +10,18 @@ import aiohttp
 import json
 
 from ...config.settings import get_settings
-from ...domain.exceptions.recommendation_errors import APIError, RateLimitError, ValidationError
+
+class APIError(Exception):
+    """General API error"""
+    pass
+
+class RateLimitError(APIError):
+    """Rate limit exceeded error"""
+    pass
+
+class ValidationError(APIError):
+    """Validation error"""
+    pass
 
 logger = logging.getLogger(__name__)
 
