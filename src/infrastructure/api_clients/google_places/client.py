@@ -14,9 +14,9 @@ from ....config.constants import (
     GOOGLE_PLACES_BASE_URL, GOOGLE_PLACES_TYPES, MAJOR_CITIES,
     PRICE_LEVEL_RANGES, TYPICAL_CUISINE_PRICE_LEVELS
 )
-from ....domain.models.restaurant import Restaurant, RestaurantCategory, PriceLevel, Location, OpeningHours, \
+from ....models.restaurant import Restaurant, RestaurantCategory, PriceLevel, Location, OpeningHours, \
     RestaurantFeatures, PopularityData
-from ....domain.models.common import TimeSlot, CacheKey
+from ....models.common import TimeSlot, CacheKey
 from .models import GooglePlacesSearchRequest, GooglePlacesSearchResponse, PlaceDetails
 
 logger = logging.getLogger(__name__)
@@ -585,7 +585,7 @@ class GooglePlacesClient(CacheableAPIClient):
                 rating=template["rating"],
                 user_ratings_total=random.randint(50, 1000),
                 phone_number=f"+1-555-{1000 + i:04d}",
-                website=f"https://{template['name'].lower().replace(' ', '').replace("'", '')}.com",
+                website=f'https://{template["name"].lower().replace(" ", "").replace(chr(39), "")}.com',
                 formatted_address=location.address,
                 opening_hours=opening_hours,
                 features=features,

@@ -7,7 +7,7 @@ from openai import AsyncOpenAI
 from ..base_client import BaseAPIClient, APIResponse, with_retry
 from ....config.settings import get_settings
 from ....config.constants import OPENAI_EMBEDDING_DIMENSIONS, OPENAI_MAX_TOKENS
-from ....domain.models.common import CacheKey
+from ....models.common import CacheKey
 
 logger = logging.getLogger(__name__)
 

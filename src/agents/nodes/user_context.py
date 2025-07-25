@@ -4,9 +4,9 @@ import logging
 from .base_node import BaseNode
 from ..recommendation_state import RecommendationState
 from ...infrastructure.databases.vector_db.base import VectorDBAdapter
-from ...domain.models.user import UserPreferences, User
-from ...domain.models.query import QueryContext
-from ...domain.models.common import Location
+from ...models.user import UserPreferences, User
+from ...models.query import QueryContext
+from ...models.common import Location
 
 logger = logging.getLogger(__name__)
 
