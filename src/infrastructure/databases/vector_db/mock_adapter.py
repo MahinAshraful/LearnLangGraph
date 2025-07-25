@@ -238,7 +238,7 @@ class MockVectorAdapter(VectorDBAdapter):
             {
                 "user_id": "foodie_explorer_0",
                 "cuisines": [RestaurantCategory.JAPANESE, RestaurantCategory.THAI, RestaurantCategory.INDIAN],
-                "price_pref": PriceLevel.UPSCALE,
+                "price_pref": PriceLevel.EXPENSIVE,
                 "ambiance": [AmbiancePreference.TRENDY, AmbiancePreference.AUTHENTIC],
                 "dietary": []
             },
@@ -313,11 +313,11 @@ class MockVectorAdapter(VectorDBAdapter):
         # Generate mock restaurant embeddings
         restaurant_templates = [
             {"place_id": "mock_place_0", "name": "Mario's Authentic Italian", "cuisine": RestaurantCategory.ITALIAN,
-             "price": PriceLevel.UPSCALE},
+             "price": PriceLevel.EXPENSIVE},
             {"place_id": "mock_place_1", "name": "Golden Dragon", "cuisine": RestaurantCategory.CHINESE,
              "price": PriceLevel.MODERATE},
             {"place_id": "mock_place_2", "name": "Sakura Sushi", "cuisine": RestaurantCategory.JAPANESE,
-             "price": PriceLevel.UPSCALE},
+             "price": PriceLevel.EXPENSIVE},
             {"place_id": "mock_place_3", "name": "Thai Spice", "cuisine": RestaurantCategory.THAI,
              "price": PriceLevel.MODERATE},
             {"place_id": "mock_place_4", "name": "The Burger Joint", "cuisine": RestaurantCategory.AMERICAN,
@@ -327,7 +327,7 @@ class MockVectorAdapter(VectorDBAdapter):
             {"place_id": "mock_place_6", "name": "El Mariachi", "cuisine": RestaurantCategory.MEXICAN,
              "price": PriceLevel.MODERATE},
             {"place_id": "mock_place_7", "name": "Café Parisien", "cuisine": RestaurantCategory.FRENCH,
-             "price": PriceLevel.UPSCALE},
+             "price": PriceLevel.EXPENSIVE},
             {"place_id": "mock_place_8", "name": "Curry Palace", "cuisine": RestaurantCategory.INDIAN,
              "price": PriceLevel.MODERATE},
             {"place_id": "mock_place_9", "name": "Steakhouse 21", "cuisine": RestaurantCategory.STEAKHOUSE,
