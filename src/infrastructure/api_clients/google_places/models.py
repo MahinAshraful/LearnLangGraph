@@ -4,7 +4,7 @@ from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
-from ....domain.models.common import BaseModel as DomainBaseModel
+from ....models.common import BaseModel as DomainBaseModel
 
 
 @dataclass

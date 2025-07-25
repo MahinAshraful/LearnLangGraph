@@ -107,7 +107,7 @@ class RestaurantRecommendationWorkflow:
 
         try:
             # Initialize state
-            from ...domain.models.common import Location
+            from ...models.common import Location
 
             location = None
             if user_location:

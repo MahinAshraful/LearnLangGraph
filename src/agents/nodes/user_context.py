@@ -86,27 +86,27 @@ class UserContextNode(BaseNode):
 
                 # Populate from metadata
                 if "preferred_cuisines" in metadata:
-                    from ...domain.models.restaurant import RestaurantCategory
+                    from ...models.restaurant import RestaurantCategory
                     user_preferences.favorite_cuisines = [
                         RestaurantCategory(cuisine) for cuisine in metadata["preferred_cuisines"]
                     ]
 
                 if "price_preference" in metadata:
-                    from ...domain.models.restaurant import PriceLevel
+                    from ...models.restaurant import PriceLevel
                     try:
                         user_preferences.preferred_price_levels = [PriceLevel(metadata["price_preference"])]
                     except (ValueError, KeyError):
                         pass
 
                 if "ambiance_preferences" in metadata:
-                    from ...domain.models.user import AmbiancePreference
+                    from ...models.user import AmbiancePreference
                     user_preferences.preferred_ambiance = [
                         AmbiancePreference(amb) for amb in metadata["ambiance_preferences"]
                         if amb in [a.value for a in AmbiancePreference]
                     ]
 
                 if "dietary_restrictions" in metadata:
-                    from ...domain.models.user import DietaryRestriction
+                    from ...models.user import DietaryRestriction
                     user_preferences.dietary_restrictions = [
                         DietaryRestriction(diet) for diet in metadata["dietary_restrictions"]
                         if diet in [d.value for d in DietaryRestriction]
@@ -151,13 +151,13 @@ class UserContextNode(BaseNode):
 
                     # Populate preferences from metadata
                     if "preferred_cuisines" in metadata:
-                        from ...domain.models.restaurant import RestaurantCategory
+                        from ...models.restaurant import RestaurantCategory
                         similar_user.favorite_cuisines = [
                             RestaurantCategory(cuisine) for cuisine in metadata["preferred_cuisines"]
                         ]
 
                     if "price_preference" in metadata:
-                        from ...domain.models.restaurant import PriceLevel
+                        from ...models.restaurant import PriceLevel
                         try:
                             similar_user.preferred_price_levels = [PriceLevel(metadata["price_preference"])]
                         except (ValueError, KeyError):
