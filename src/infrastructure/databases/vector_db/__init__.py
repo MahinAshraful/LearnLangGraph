@@ -1,13 +1,12 @@
-from .base import VectorDBAdapter, VectorSearchResult, VectorDocument
-from .chroma_adapter import ChromaAdapter
-from .mock_adapter import MockVectorAdapter
+from .mock_adapter import VectorDBAdapter, VectorSearchResult, VectorDocument, MockVectorAdapter
+# from .chroma_adapter import ChromaAdapter  # Comment out for now since it imports from base
 
 __all__ = [
     "VectorDBAdapter",
     "VectorSearchResult",
     "VectorDocument",
-    "ChromaAdapter",
     "MockVectorAdapter"
+    # "ChromaAdapter"  # Comment out for now
 ]
 
 # src/infrastructure/databases/vector_db/base.py

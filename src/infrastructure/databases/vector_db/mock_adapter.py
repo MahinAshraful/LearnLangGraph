@@ -6,8 +6,8 @@ import logging
 import asyncio
 
 from .base import VectorDBAdapter, VectorDocument, VectorSearchResult
-from ....domain.models.user import UserPreferences, DietaryRestriction, AmbiancePreference
-from ....domain.models.restaurant import RestaurantCategory, PriceLevel
+from ....models.user import UserPreferences, DietaryRestriction, AmbiancePreference
+from ....models.restaurant import RestaurantCategory, PriceLevel
 
 logger = logging.getLogger(__name__)
 
