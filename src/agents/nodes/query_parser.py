@@ -72,8 +72,10 @@ class QueryParserNode(BaseNode):
         for cuisine, keywords in CUISINE_KEYWORDS.items():
             if any(keyword in query_lower for keyword in keywords):
                 try:
-                    cuisines.append(RestaurantCategory(cuisine))
-                except ValueError:
+                    cuisine_enum = getattr(RestaurantCategory, cuisine.upper(), None)
+                    if cuisine_enum:
+                        cuisines.append(cuisine_enum)
+                except (ValueError, AttributeError):
                     continue
 
         if cuisines:
@@ -86,8 +88,16 @@ class QueryParserNode(BaseNode):
         for price, keywords in PRICE_KEYWORDS.items():
             if any(keyword in query_lower for keyword in keywords):
                 try:
-                    price_level = PriceLevel[price.upper()]
-                    break
+                    # Map price keywords to enum values
+                    price_mapping = {
+                        "budget": PriceLevel.INEXPENSIVE,
+                        "moderate": PriceLevel.MODERATE,
+                        "expensive": PriceLevel.EXPENSIVE,
+                        "fine_dining": PriceLevel.VERY_EXPENSIVE
+                    }
+                    price_level = price_mapping.get(price)
+                    if price_level:
+                        break
                 except (KeyError, ValueError):
                     continue
 
