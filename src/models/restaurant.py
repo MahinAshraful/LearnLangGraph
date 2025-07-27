@@ -60,7 +60,7 @@ class PriceLevel(int, Enum):
         descriptions = {
             1: "Budget-friendly",
             2: "Moderate pricing",
-            3: "Upscale",
+            3: "Expensive",
             4: "Fine dining"
         }
         return descriptions[self.value]
@@ -122,7 +122,7 @@ class RestaurantFeatures(BaseModel):
     good_for_kids: bool = False
     romantic: bool = False
     casual: bool = True
-    upscale: bool = False
+    expensive: bool = False
     has_bar: bool = False
     happy_hour: bool = False
 

@@ -73,8 +73,7 @@ class RestaurantRecommendationWorkflow:
             "scoring",
             self._should_use_smart_reasoning,
             {
-                "smart_reasoning": "smart_reasoning",  # Would add this node for complex queries
-                "output": "output_formatter"
+                "output": "output_formatter"  # ← Remove smart_reasoning, go directly to output
             }
         )
 
@@ -85,17 +84,9 @@ class RestaurantRecommendationWorkflow:
     def _should_use_smart_reasoning(self, state: RecommendationState) -> str:
         """Decide whether to use smart reasoning (GPT-4) or go directly to output"""
 
-        # For MVP, skip smart reasoning and go directly to output
+        # For MVP, always go directly to output
         # In production, would check complexity_score and other factors
-        should_use = state.get("should_use_smart_reasoning", False)
-        complexity = state.get("complexity_score", 0.0)
-
-        # Use smart reasoning for complex queries
-        if should_use and complexity > 0.6:
-            return "smart_reasoning"
-        else:
-            return "output"
-
+        return "output"  # Always return "output"
     async def recommend_restaurants(self,
                                   user_query: str,
                                   user_id: str,
@@ -372,7 +363,7 @@ async def demo_workflow():
             "location": (40.7589, -73.9851)  # Upper West Side
         },
         {
-            "query": "Looking for upscale Japanese restaurant for business dinner",
+            "query": "Looking for expensive Japanese restaurant for business dinner",
             "user_id": "business_diner_0",
             "location": (40.7505, -73.9934)  # Midtown
         }

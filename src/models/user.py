@@ -28,7 +28,7 @@ class AmbiancePreference(str, Enum):
 
     ROMANTIC = "romantic"
     CASUAL = "casual"
-    UPSCALE = "upscale"
+    EXPENSIVE = "expensive"
     FAMILY_FRIENDLY = "family_friendly"
     BUSINESS = "business"
     TRENDY = "trendy"

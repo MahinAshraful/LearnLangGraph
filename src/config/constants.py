@@ -63,7 +63,7 @@ SCORING_WEIGHTS = {
 PRICE_LEVEL_RANGES = {
     1: {"min": 5, "max": 15, "symbol": "$", "label": "Budget"},
     2: {"min": 15, "max": 35, "symbol": "$$", "label": "Moderate"},
-    3: {"min": 35, "max": 75, "symbol": "$$$", "label": "Upscale"},
+    3: {"min": 35, "max": 75, "symbol": "$$$", "label": "Expensive"},
     4: {"min": 75, "max": 200, "symbol": "$$$$", "label": "Fine Dining"}
 }
 
@@ -166,14 +166,14 @@ CUISINE_KEYWORDS = {
 PRICE_KEYWORDS = {
     "budget": ["cheap", "budget", "affordable", "inexpensive", "economical"],
     "moderate": ["moderate", "mid-range", "reasonable"],
-    "upscale": ["upscale", "nice", "fancy", "pricey"],
+    "expensive": ["expensive", "nice", "fancy", "pricey"],
     "fine_dining": ["fine dining", "expensive", "luxurious", "gourmet", "high-end"]
 }
 
 AMBIANCE_KEYWORDS = {
     "romantic": ["romantic", "date night", "intimate", "cozy"],
     "casual": ["casual", "relaxed", "laid back", "informal"],
-    "upscale": ["upscale", "elegant", "sophisticated", "classy"],
+    "expensive": ["expensive", "elegant", "sophisticated", "classy"],
     "family_friendly": ["family", "kids", "children", "family-friendly"],
     "business": ["business", "professional", "meeting", "corporate"],
     "trendy": ["trendy", "hip", "modern", "fashionable"],

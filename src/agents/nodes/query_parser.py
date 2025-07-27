@@ -152,10 +152,10 @@ class QueryParserNode(BaseNode):
 Analyze the user's restaurant query and extract:
 1. Query type (cuisine_specific, location_based, occasion_based, feature_based, price_based, time_based, mood_based, social_based, dietary_based, experience_based, general)
 2. Cuisine preferences (italian, chinese, japanese, mexican, thai, indian, french, american, mediterranean, korean, vietnamese, greek, spanish, middle_eastern, pizza, sushi, bbq, seafood, steakhouse, vegetarian, vegan, fast_food, casual_dining, fine_dining, cafe, bar, bakery)
-3. Price range (budget, moderate, upscale, fine_dining)
+3. Price range (budget, moderate, expensive, fine_dining)
 4. Party size (number)
 5. Dietary restrictions (vegetarian, vegan, gluten_free, dairy_free, nut_free, halal, kosher, keto, paleo, low_carb, low_sodium)
-6. Ambiance preferences (romantic, casual, upscale, family_friendly, business, trendy, quiet, lively, cozy, outdoor, authentic, modern, traditional)
+6. Ambiance preferences (romantic, casual, expensive, family_friendly, business, trendy, quiet, lively, cozy, outdoor, authentic, modern, traditional)
 7. Required features (outdoor_seating, live_music, parking, delivery, reservations, wifi, wheelchair_accessible)
 8. Urgency (now, soon, today, this_week, planning)
 9. Distance preference (walking, nearby, city_wide, no_preference)

@@ -374,7 +374,7 @@ class UserPreferenceTracker:
             # Price insights
             if "price_preference" in metadata:
                 price_level = metadata["price_preference"]
-                price_labels = {1: "budget-friendly", 2: "moderately-priced", 3: "upscale", 4: "fine dining"}
+                price_labels = {1: "budget-friendly", 2: "moderately-priced", 3: "expensive", 4: "fine dining"}
                 label = price_labels.get(price_level, "various price ranges")
                 insights.append(f"You typically prefer {label} restaurants")
 

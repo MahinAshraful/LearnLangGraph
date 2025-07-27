@@ -180,7 +180,7 @@ class ScoringNode(BaseNode):
             if "date" in occasion.lower() or "romantic" in occasion.lower():
                 score_breakdown.occasion_match = 0.9 if restaurant.features.romantic else 0.5
             elif "business" in occasion.lower():
-                score_breakdown.occasion_match = 0.9 if "upscale" in str(restaurant.features) else 0.6
+                score_breakdown.occasion_match = 0.9 if "expensive" in str(restaurant.features) else 0.6
             elif "family" in occasion.lower():
                 score_breakdown.occasion_match = 0.9 if restaurant.features.good_for_kids else 0.4
 
@@ -283,7 +283,7 @@ class ScoringNode(BaseNode):
             if "date" in occasion.lower() or "romantic" in occasion.lower():
                 occasion_score = 0.9 if restaurant.features.romantic else 0.5
             elif "business" in occasion.lower():
-                occasion_score = 0.9 if "upscale" in str(restaurant.features) else 0.6
+                occasion_score = 0.9 if "expensive" in str(restaurant.features) else 0.6
             elif "family" in occasion.lower():
                 occasion_score = 0.9 if restaurant.features.good_for_kids else 0.4
             else:
