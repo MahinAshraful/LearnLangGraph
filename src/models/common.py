@@ -10,7 +10,7 @@ class BaseModel(PydanticBaseModel):
 
     model_config = {
         "validate_assignment": True,
-        "use_enum_values": True,
+        "use_enum_values": False,
         "populate_by_name": True  # renamed from allow_population_by_field_name
     }
 

@@ -11,6 +11,14 @@ from ...models.user import DietaryRestriction, AmbiancePreference
 from ...models.common import Urgency, DistancePreference
 from ...config.constants import CUISINE_KEYWORDS, PRICE_KEYWORDS, AMBIANCE_KEYWORDS, FEATURE_KEYWORDS
 
+import traceback
+
+def debug_log_error(e, location):
+    print(f"DEBUG: Error in {location}: {e}")
+    print(f"DEBUG: Error type: {type(e)}")
+    print(f"DEBUG: Traceback:")
+    traceback.print_exc()
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,18 +37,28 @@ class QueryParserNode(BaseNode):
             return self._handle_error(state, "No user query provided", is_fatal=True)
 
         try:
+            print(f"DEBUG: Starting to parse query: '{user_query}'")
+
             # First try rule-based parsing for simple queries
+            print("DEBUG: About to call _try_rule_based_parsing")
             parsed_query = await self._try_rule_based_parsing(user_query)
+            print(f"DEBUG: Rule-based parsing completed. Query type: {parsed_query.query_type}")
 
             # If rule-based parsing is insufficient, use LLM
             if parsed_query.confidence < 0.7 or parsed_query.query_type == QueryType.GENERAL:
+                print("DEBUG: About to call _llm_enhanced_parsing")
                 parsed_query = await self._llm_enhanced_parsing(user_query, parsed_query)
+                print("DEBUG: LLM parsing completed")
 
             # Calculate complexity score
+            print("DEBUG: About to calculate complexity_score")
             complexity_score = parsed_query.complexity_score
+            print(f"DEBUG: Complexity score: {complexity_score}")
 
             # Determine if smart reasoning is needed
+            print("DEBUG: About to check requires_smart_reasoning")
             should_use_smart_reasoning = parsed_query.requires_smart_reasoning
+            print(f"DEBUG: Smart reasoning needed: {should_use_smart_reasoning}")
 
             logger.info(f"Parsed query: {parsed_query.query_type.value} (confidence: {parsed_query.confidence:.2f})")
 
@@ -48,11 +66,17 @@ class QueryParserNode(BaseNode):
                 "parsed_query": parsed_query,
                 "complexity_score": complexity_score,
                 "should_use_smart_reasoning": should_use_smart_reasoning,
-                **self._update_performance_tracking(state, tokens_used=0)  # Will update after LLM call
+                **self._update_performance_tracking(state, tokens_used=0)
             }
 
+
+
         except Exception as e:
+
+            debug_log_error(e, "execute method")
+
             logger.error(f"Query parsing failed: {e}")
+
             return self._handle_error(state, f"Failed to parse query: {str(e)}", is_fatal=True)
 
     async def _try_rule_based_parsing(self, query: str) -> ParsedQuery:
@@ -72,7 +96,19 @@ class QueryParserNode(BaseNode):
         for cuisine, keywords in CUISINE_KEYWORDS.items():
             if any(keyword in query_lower for keyword in keywords):
                 try:
-                    cuisine_enum = getattr(RestaurantCategory, cuisine.upper(), None)
+                    # Map cuisine string to enum
+                    cuisine_mapping = {
+                        "italian": RestaurantCategory.ITALIAN,
+                        "chinese": RestaurantCategory.CHINESE,
+                        "japanese": RestaurantCategory.JAPANESE,
+                        "mexican": RestaurantCategory.MEXICAN,
+                        "thai": RestaurantCategory.THAI,
+                        "indian": RestaurantCategory.INDIAN,
+                        "french": RestaurantCategory.FRENCH,
+                        "american": RestaurantCategory.AMERICAN,
+                        "mediterranean": RestaurantCategory.MEDITERRANEAN
+                    }
+                    cuisine_enum = cuisine_mapping.get(cuisine.lower())
                     if cuisine_enum:
                         cuisines.append(cuisine_enum)
                 except (ValueError, AttributeError):
@@ -240,27 +276,50 @@ Please provide enhanced parsing as JSON:"""
         # Update with LLM enhancements
         if llm_data.get("query_type"):
             try:
-                merged.query_type = QueryType(llm_data["query_type"])
-            except ValueError:
+                query_type_val = llm_data["query_type"]
+                if isinstance(query_type_val, str):
+                    merged.query_type = QueryType(query_type_val)
+                else:
+                    merged.query_type = query_type_val
+            except (ValueError, TypeError):
                 pass
 
         if llm_data.get("cuisines"):
             llm_cuisines = []
             for cuisine in llm_data["cuisines"]:
                 try:
-                    llm_cuisines.append(RestaurantCategory(cuisine))
-                except ValueError:
+                    if isinstance(cuisine, str):
+                        llm_cuisines.append(RestaurantCategory(cuisine))
+                    elif hasattr(cuisine, 'value'):
+                        llm_cuisines.append(cuisine)
+                    else:
+                        llm_cuisines.append(RestaurantCategory(cuisine))
+                except (ValueError, TypeError):
                     continue
             # Merge with existing cuisines
-            all_cuisines = set(merged.cuisine_preferences + llm_cuisines)
-            merged.cuisine_preferences = list(all_cuisines)
+            existing_cuisine_values = {c.value for c in merged.cuisine_preferences}
+            for cuisine in llm_cuisines:
+                if cuisine.value not in existing_cuisine_values:
+                    merged.cuisine_preferences.append(cuisine)
 
         if llm_data.get("price_range"):
             try:
-                price_level = PriceLevel(llm_data["price_range"])
+                price_val = llm_data["price_range"]
+                if isinstance(price_val, str):
+                    # Map string to enum
+                    price_mapping = {
+                        "budget": PriceLevel.INEXPENSIVE,
+                        "moderate": PriceLevel.MODERATE,
+                        "expensive": PriceLevel.EXPENSIVE,
+                        "fine_dining": PriceLevel.VERY_EXPENSIVE
+                    }
+                    price_level = price_mapping.get(price_val, PriceLevel.MODERATE)
+                else:
+                    price_level = PriceLevel(price_val)
+
                 if price_level not in merged.price_preferences:
                     merged.price_preferences.append(price_level)
-            except ValueError:
+            except (ValueError, TypeError):
                 pass
 
         if llm_data.get("party_size") and isinstance(llm_data["party_size"], int):
@@ -273,7 +332,10 @@ Please provide enhanced parsing as JSON:"""
                     llm_dietary.append(DietaryRestriction(restriction))
                 except ValueError:
                     continue
-            merged.dietary_requirements = list(set(merged.dietary_requirements + llm_dietary))
+            existing_dietary = {d.value for d in merged.dietary_requirements}
+            for dietary in llm_dietary:
+                if dietary.value not in existing_dietary:
+                    merged.dietary_requirements.append(dietary)
 
         if llm_data.get("ambiance_preferences"):
             llm_ambiance = []
@@ -282,7 +344,10 @@ Please provide enhanced parsing as JSON:"""
                     llm_ambiance.append(AmbiancePreference(ambiance))
                 except ValueError:
                     continue
-            merged.ambiance_preferences = list(set(merged.ambiance_preferences + llm_ambiance))
+            existing_ambiance = {a.value for a in merged.ambiance_preferences}
+            for ambiance in llm_ambiance:
+                if ambiance.value not in existing_ambiance:
+                    merged.ambiance_preferences.append(ambiance)
 
         if llm_data.get("required_features"):
             merged.required_features = list(set(merged.required_features + llm_data["required_features"]))
@@ -304,3 +369,36 @@ Please provide enhanced parsing as JSON:"""
             merged.social_context.occasion = llm_data["occasion"]
 
         return merged
+
+async def test_basic_parsing():
+    """Test basic parsing without LLM"""
+    try:
+        print("Testing basic ParsedQuery creation...")
+
+        # Test basic ParsedQuery creation
+        test_query = ParsedQuery(
+            original_query="test query",
+            query_type=QueryType.GENERAL,
+            confidence=0.5
+        )
+        print(f"Basic ParsedQuery created successfully: {test_query.query_type.value}")
+
+        # Test complexity score
+        print("Testing complexity score...")
+        complexity = test_query.complexity_score
+        print(f"Complexity score: {complexity}")
+
+        # Test requires_smart_reasoning
+        print("Testing smart reasoning...")
+        smart_reasoning = test_query.requires_smart_reasoning
+        print(f"Smart reasoning: {smart_reasoning}")
+
+        print("All basic tests passed!")
+
+    except Exception as e:
+        print(f"Test failed: {e}")
+        traceback.print_exc()
+
+if __name__ == "__main__":
+    import asyncio
+    asyncio.run(test_basic_parsing())
