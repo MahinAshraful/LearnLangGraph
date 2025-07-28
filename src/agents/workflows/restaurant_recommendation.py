@@ -3,7 +3,6 @@ import logging
 from typing import Dict, Any, Optional
 
 from langgraph.graph import StateGraph, START, END
-from langgraph.graph.message import add_messages
 
 from ..recommendation_state import RecommendationState
 from ..nodes.query_parser import QueryParserNode
@@ -87,10 +86,11 @@ class RestaurantRecommendationWorkflow:
         # For MVP, always go directly to output
         # In production, would check complexity_score and other factors
         return "output"  # Always return "output"
+
     async def recommend_restaurants(self,
-                                  user_query: str,
-                                  user_id: str,
-                                  user_location: Optional[tuple] = None) -> Dict[str, Any]:
+                                    user_query: str,
+                                    user_id: str,
+                                    user_location: Optional[tuple] = None) -> Dict[str, Any]:
         """Main entry point for restaurant recommendations"""
 
         start_time = time.time()
@@ -132,10 +132,18 @@ class RestaurantRecommendationWorkflow:
                 user_preferences=None
             )
 
+            print(f"DEBUG WORKFLOW: Initial state type: {type(initial_state)}")
+            print(f"DEBUG WORKFLOW: Initial state keys: {list(initial_state.keys())}")
+            print(f"DEBUG WORKFLOW: user_query in state: {initial_state.get('user_query')}")
+
             logger.info(f"Starting recommendation workflow for user {user_id}: '{user_query}'")
 
             # Execute the workflow
+            print("DEBUG WORKFLOW: About to call graph.ainvoke")
             final_state = await self.graph.ainvoke(initial_state)
+            print(f"DEBUG WORKFLOW: Final state type: {type(final_state)}")
+            print(
+                f"DEBUG WORKFLOW: Final state keys: {list(final_state.keys()) if hasattr(final_state, 'keys') else 'No keys method'}")
 
             # Calculate total processing time
             total_time = time.time() - start_time
@@ -179,7 +187,7 @@ class RestaurantRecommendationWorkflow:
                     "recommendations": formatted_recommendations,
                     "query_info": {
                         "original_query": user_query,
-                        "parsed_query_type": final_state.get("parsed_query", {}).get("query_type", "general") if final_state.get("parsed_query") else "general",
+                        "parsed_query_type": getattr(final_state.get("parsed_query"), "query_type", "general") if final_state.get("parsed_query") else "general",
                         "complexity_score": final_state.get("complexity_score", 0.0),
                         "confidence_score": final_state.get("confidence_score", 0.0)
                     }
@@ -205,6 +213,9 @@ class RestaurantRecommendationWorkflow:
             total_time = time.time() - start_time
 
             logger.error(f"Workflow execution failed: {e}")
+            import traceback
+            print(f"DEBUG WORKFLOW: Exception details:")
+            traceback.print_exc()
 
             return {
                 "success": False,
