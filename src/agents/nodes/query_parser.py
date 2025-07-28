@@ -60,7 +60,7 @@ class QueryParserNode(BaseNode):
             should_use_smart_reasoning = parsed_query.requires_smart_reasoning
             print(f"DEBUG: Smart reasoning needed: {should_use_smart_reasoning}")
 
-            logger.info(f"Parsed query: {parsed_query.query_type.value} (confidence: {parsed_query.confidence:.2f})")
+            logger.info(f"Parsed query: {parsed_query.query_type} (confidence: {parsed_query.confidence:.2f})")
 
             return {
                 "parsed_query": parsed_query,

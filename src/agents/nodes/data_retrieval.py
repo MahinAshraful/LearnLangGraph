@@ -6,8 +6,8 @@ from .base_node import BaseNode
 from ..recommendation_state import RecommendationState
 from ...infrastructure.api_clients.google_places.client import GooglePlacesClient, NearbySearchRequest
 from ...models.restaurant import Restaurant, RestaurantCategory
-from ...models.common import Location
 from ...models.query import ParsedQuery
+from ...models.common import Location, Urgency
 from ...config.constants import DEFAULT_SEARCH_RADIUS_KM
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ class DataRetrievalNode(BaseNode):
                 keyword=keyword,
                 min_price=self._get_min_price(parsed_query),
                 max_price=self._get_max_price(parsed_query),
-                open_now=parsed_query.time_preference.urgency in ["now", "soon"]
+                open_now=parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]
             )]
 
         elif parsed_query.cuisine_preferences and len(parsed_query.cuisine_preferences) > 1:
@@ -110,7 +110,7 @@ class DataRetrievalNode(BaseNode):
                     keyword=keyword,
                     min_price=self._get_min_price(parsed_query),
                     max_price=self._get_max_price(parsed_query),
-                    open_now=parsed_query.time_preference.urgency in ["now", "soon"]
+                    open_now=parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]
                 ))
 
             return requests
@@ -137,7 +137,7 @@ class DataRetrievalNode(BaseNode):
                 keyword=keyword,
                 min_price=self._get_min_price(parsed_query),
                 max_price=self._get_max_price(parsed_query),
-                open_now=parsed_query.time_preference.urgency in ["now", "soon"]
+                open_now=parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]
             )]
 
     def _calculate_search_radius(self, parsed_query: ParsedQuery) -> int:
@@ -272,7 +272,7 @@ class DataRetrievalNode(BaseNode):
                     continue
 
             # Opening hours filter for urgent requests
-            if (parsed_query.time_preference.urgency == "now" and
+            if (parsed_query.time_preference.urgency == Urgency.NOW and
                     not restaurant.is_open_now):
                 continue
 
