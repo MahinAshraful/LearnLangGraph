@@ -250,9 +250,15 @@ class DataRetrievalNode(BaseNode):
     def _apply_basic_filters(self, restaurants: List[Restaurant], parsed_query: ParsedQuery) -> List[Restaurant]:
         """Apply basic quality and requirement filters"""
 
+        print(f"DEBUG FILTER: Input restaurants: {len(restaurants)}")
+        print(f"DEBUG FILTER: Query cuisines: {[c.value for c in parsed_query.cuisine_preferences]}")
+        print(f"DEBUG FILTER: Query prices: {[p.value for p in parsed_query.price_preferences]}")
+
         filtered = []
 
         for restaurant in restaurants:
+            print(
+                f"  {restaurant.name}: {restaurant.primary_category.value}, price={restaurant.price_level.value if restaurant.price_level else None}")
             # Basic quality filter
             if restaurant.rating < 3.0 or restaurant.user_ratings_total < 10:
                 continue

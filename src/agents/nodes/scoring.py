@@ -63,7 +63,7 @@ class ScoringNode(BaseNode):
                     primary_reasons=reasons,
                     explanation=explanation,
                     confidence=confidence,
-                    rank=0,  # Will be set after sorting
+                    rank=1,  # Will be set after sorting
                     strategy_used="hybrid"
                 )
 
@@ -352,7 +352,9 @@ class ScoringNode(BaseNode):
 
         # User history boost (20% of boost score)
         history_boost = 0.0
-        if user_preferences and restaurant.place_id in user_preferences.favorite_restaurants:
+        if (user_preferences and
+                hasattr(user_preferences, 'favorite_restaurants') and
+                restaurant.place_id in user_preferences.favorite_restaurants):
             history_boost = 1.0  # User has favorited this place
         elif restaurant.place_id in collaborative_restaurants:
             history_boost = 0.6  # Similar users like this place
