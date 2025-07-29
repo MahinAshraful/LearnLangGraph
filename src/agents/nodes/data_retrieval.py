@@ -158,26 +158,26 @@ class DataRetrievalNode(BaseNode):
         """Convert cuisine category to search keyword"""
 
         keyword_mapping = {
-            RestaurantCategory.ITALIAN: "italian restaurant",
-            RestaurantCategory.CHINESE: "chinese restaurant",
-            RestaurantCategory.JAPANESE: "japanese restaurant",
-            RestaurantCategory.MEXICAN: "mexican restaurant",
-            RestaurantCategory.THAI: "thai restaurant",
-            RestaurantCategory.INDIAN: "indian restaurant",
-            RestaurantCategory.FRENCH: "french restaurant",
-            RestaurantCategory.AMERICAN: "american restaurant",
-            RestaurantCategory.MEDITERRANEAN: "mediterranean restaurant",
-            RestaurantCategory.KOREAN: "korean restaurant",
-            RestaurantCategory.VIETNAMESE: "vietnamese restaurant",
+            RestaurantCategory.ITALIAN: "italian",
+            RestaurantCategory.CHINESE: "chinese",
+            RestaurantCategory.JAPANESE: "japanese",
+            RestaurantCategory.MEXICAN: "mexican",
+            RestaurantCategory.THAI: "thai",
+            RestaurantCategory.INDIAN: "indian",
+            RestaurantCategory.FRENCH: "french",
+            RestaurantCategory.AMERICAN: "american",
+            RestaurantCategory.MEDITERRANEAN: "mediterranean",
+            RestaurantCategory.KOREAN: "korean",
+            RestaurantCategory.VIETNAMESE: "vietnamese",
             RestaurantCategory.PIZZA: "pizza",
             RestaurantCategory.SUSHI: "sushi",
             RestaurantCategory.BBQ: "barbecue",
-            RestaurantCategory.SEAFOOD: "seafood restaurant",
+            RestaurantCategory.SEAFOOD: "seafood",
             RestaurantCategory.STEAKHOUSE: "steakhouse",
-            RestaurantCategory.VEGETARIAN: "vegetarian restaurant",
+            RestaurantCategory.VEGETARIAN: "vegetarian",
             RestaurantCategory.FAST_FOOD: "fast food",
             RestaurantCategory.CAFE: "cafe",
-            RestaurantCategory.BAR: "bar restaurant"
+            RestaurantCategory.BAR: "bar"
         }
 
         return keyword_mapping.get(cuisine, cuisine.value)
