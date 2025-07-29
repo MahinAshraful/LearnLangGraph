@@ -88,6 +88,11 @@ class GooglePlacesClient(CacheableAPIClient):
     async def _mock_nearby_search(self, request: NearbySearchRequest) -> APIResponse[List[Restaurant]]:
         """Mock implementation for development"""
 
+        print(f"DEBUG MOCK: Searching for keyword='{request.keyword}', total restaurants={len(self.mock_restaurants)}")
+        for i, r in enumerate(self.mock_restaurants):
+            if r.primary_category.value == "mexican":
+                print(f"  Mexican restaurant {i}: {r.name} ({r.primary_category.value})")
+
         import time
         start_time = time.time()
 
