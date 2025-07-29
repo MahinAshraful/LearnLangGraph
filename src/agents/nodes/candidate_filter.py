@@ -76,6 +76,7 @@ class CandidateFilterNode(BaseNode):
         for restaurant in restaurants:
             # Skip restaurants user has explicitly disliked
             if (user_preferences and
+                    hasattr(user_preferences, 'disliked_restaurants') and
                     restaurant.place_id in user_preferences.disliked_restaurants):
                 continue
 
