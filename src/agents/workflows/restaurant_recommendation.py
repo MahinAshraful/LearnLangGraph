@@ -14,7 +14,9 @@ from ..nodes.output_formatter import OutputFormatterNode
 from ...infrastructure.api_clients.openai.client import OpenAIClient
 from ...infrastructure.api_clients.google_places.client import GooglePlacesClient
 from ...infrastructure.databases.vector_db.base import VectorDBAdapter
+from ...infrastructure.api_clients.places_factory import PlacesClientFactory
 from ...config.settings import get_settings
+
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +26,7 @@ class RestaurantRecommendationWorkflow:
 
     def __init__(self,
                  openai_client: OpenAIClient,
-                 google_places_client: GooglePlacesClient,
+                 places_client,
                  vector_db: VectorDBAdapter):
 
         self.settings = get_settings()
@@ -32,7 +34,7 @@ class RestaurantRecommendationWorkflow:
         # Initialize agents
         self.query_parser = QueryParserNode(openai_client)
         self.user_context = UserContextNode(vector_db)
-        self.data_retrieval = DataRetrievalNode(google_places_client)
+        self.data_retrieval = DataRetrievalNode(places_client)
         self.candidate_filter = CandidateFilterNode()
         self.scoring = ScoringNode()
         self.output_formatter = OutputFormatterNode()
@@ -296,31 +298,38 @@ class RestaurantRecommendationWorkflow:
             node.error_count = 0
 
 
-# Factory function for creating the workflow
 async def create_restaurant_recommendation_workflow(
-    openai_api_key: str,
-    use_mock_services: bool = True,
-    cache_adapter = None
+        openai_api_key: str,
+        use_mock_services: bool = True,
+        cache_adapter=None
 ) -> RestaurantRecommendationWorkflow:
     """Factory function to create and initialize the workflow"""
 
     # Initialize OpenAI client
     openai_client = OpenAIClient(api_key=openai_api_key, cache_adapter=cache_adapter)
 
-    # Initialize Google Places client (mock for MVP)
-    google_places_client = GooglePlacesClient(
-        api_key=None,  # No API key needed for mock
-        cache_adapter=cache_adapter,
-        use_mock=use_mock_services
-    )
+    # Initialize Places client (Foursquare, Google, or Mock)
+    from ...infrastructure.api_clients.places_factory import PlacesClientFactory
 
+    if use_mock_services:
+        places_client = PlacesClientFactory.create_client("mock", cache_adapter=cache_adapter)
+    else:
+        places_client = PlacesClientFactory.create_client("auto", cache_adapter=cache_adapter)
+
+    # Initialize Vector DB (mock for MVP)
     # Initialize Vector DB (mock for MVP)
     if use_mock_services:
         from ...infrastructure.databases.vector_db.mock_adapter import MockVectorAdapter
         vector_db = MockVectorAdapter()
     else:
-        from ...infrastructure.databases.vector_db.chroma_adapter import ChromaAdapter
-        vector_db = ChromaAdapter()
+        # TODO: Implement ChromaAdapter later
+        # from ...infrastructure.databases.vector_db.chroma_adapter import ChromaAdapter
+        # vector_db = ChromaAdapter()
+
+        # For now, fall back to mock even when use_mock_services=False
+        from ...infrastructure.databases.vector_db.mock_adapter import MockVectorAdapter
+        vector_db = MockVectorAdapter()
+        print("WARNING: ChromaAdapter not implemented, using MockVectorAdapter")
 
     # Connect to services
     await vector_db.connect()
@@ -328,12 +337,11 @@ async def create_restaurant_recommendation_workflow(
     # Create workflow
     workflow = RestaurantRecommendationWorkflow(
         openai_client=openai_client,
-        google_places_client=google_places_client,
+        places_client=places_client,  # Keep same parameter name for now
         vector_db=vector_db
     )
 
     logger.info("Restaurant recommendation workflow created and initialized")
-
     return workflow
 
 
@@ -357,7 +365,7 @@ async def demo_workflow():
     # Create workflow
     workflow = await create_restaurant_recommendation_workflow(
         openai_api_key=openai_api_key,
-        use_mock_services=True,
+        use_mock_services=False,
         cache_adapter=cache
     )
 

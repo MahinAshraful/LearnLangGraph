@@ -23,6 +23,9 @@ class APIConfig:
     # Google Places API
     google_places_api_key: str = field(default_factory=lambda: os.getenv("GOOGLE_PLACES_API_KEY", ""))
 
+    #FourSquare API
+    foursquare_api_key: str = field(default_factory=lambda: os.getenv("FOURSQUARE_API_KEY", ""))
+
     # Weather API (OpenWeatherMap)
     weather_api_key: str = field(default_factory=lambda: os.getenv("WEATHER_API_KEY", ""))
 
@@ -34,8 +37,14 @@ class APIConfig:
         "google_places": 100,  # requests per minute
         "openai": 60,
         "weather": 60,
-        "eventbrite": 50
+        "eventbrite": 50,
+        "foursquare": 950
     })
+
+    def debug_keys(self):
+        print(f"DEBUG KEYS:")
+        print(f"  FOURSQUARE_API_KEY from env: {repr(os.getenv('FOURSQUARE_API_KEY'))}")
+        print(f"  foursquare_api_key field: {repr(self.foursquare_api_key)}")
 
 
 @dataclass

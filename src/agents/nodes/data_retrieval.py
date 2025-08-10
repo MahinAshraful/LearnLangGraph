@@ -4,7 +4,7 @@ import logging
 
 from .base_node import BaseNode
 from ..recommendation_state import RecommendationState
-from ...infrastructure.api_clients.google_places.client import GooglePlacesClient, NearbySearchRequest
+from ...infrastructure.api_clients.google_places.client import NearbySearchRequest
 from ...models.restaurant import Restaurant, RestaurantCategory
 from ...models.query import ParsedQuery
 from ...models.common import Location, Urgency
@@ -16,9 +16,9 @@ logger = logging.getLogger(__name__)
 class DataRetrievalNode(BaseNode):
     """Retrieves restaurant data from external APIs with intelligent query optimization"""
 
-    def __init__(self, google_places_client: GooglePlacesClient):
+    def __init__(self, places_client):
         super().__init__("data_retrieval")
-        self.google_places_client = google_places_client
+        self.places_client = places_client  # Generic places client
 
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Retrieve nearby restaurants based on parsed query and user context"""
@@ -198,12 +198,13 @@ class DataRetrievalNode(BaseNode):
         """Execute a single search request"""
 
         try:
-            response = await self.google_places_client.nearby_search(request)
+            response = await self.places_client.nearby_search(request)
+
 
             if response.success:
                 return response.data
             else:
-                logger.warning(f"Google Places search failed: {response.error}")
+                logger.warning(f"Places search failed: {response.error}")
                 return []
 
         except Exception as e:
@@ -326,7 +327,7 @@ class DataRetrievalNode(BaseNode):
             try:
                 # Only enhance top-rated restaurants to save API calls
                 if restaurant.rating >= 4.2 and restaurant.user_ratings_total >= 100:
-                    detailed_response = await self.google_places_client.get_place_details(restaurant.place_id)
+                    detailed_response = await self.places_client.get_place_details(restaurant.place_id)
 
                     if detailed_response.success:
                         enhanced_restaurants.append(detailed_response.data)
@@ -346,6 +347,6 @@ class DataRetrievalNode(BaseNode):
 
         return {
             "node_name": self.name,
-            "google_places_health": "unknown",  # Would check client health
+            "places_api_health": "unknown",  # Would check client health
             **self.get_performance_stats()
         }
