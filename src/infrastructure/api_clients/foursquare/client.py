@@ -34,26 +34,29 @@ class FoursquareClient(CacheableAPIClient):
         logger.info("Foursquare Places client initialized")
 
     def _get_headers(self):
-        headers = super()._get_headers()
+        """Override base headers for Foursquare API requirements"""
 
-        # Debug and null check
         if not self.api_key:
             logger.error("API key is None!")
-            return headers
+            raise ValueError("Foursquare API key is required")
 
         # Remove fsq3 prefix if present
         api_key_without_prefix = self.api_key
         if self.api_key.startswith("fsq3"):
             api_key_without_prefix = self.api_key[4:]
 
-        headers.update({
+        # Return Foursquare-specific headers (don't call super() to avoid conflicts)
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": "RestaurantRecommender/1.0.0",
             "Authorization": f"Bearer {api_key_without_prefix}",
             "X-Places-Api-Version": "2025-06-17"
-        })
+        }
+
         return headers
 
     async def nearby_search(self, request) -> APIResponse[List[Restaurant]]:
-        """Search for nearby restaurants (same interface as GooglePlacesClient)"""
+        """Search for nearby restaurants with proper category filtering"""
 
         # Convert your NearbySearchRequest to Foursquare parameters
         params = {
@@ -62,9 +65,12 @@ class FoursquareClient(CacheableAPIClient):
             "limit": 50
         }
 
-        # Add keyword if specified
+        # Add keyword if specified - this will help filter for restaurants
         if request.keyword:
-            params["query"] = f"{request.keyword} restaurant"
+            params["query"] = f"{request.keyword}"
+        else:
+            # If no specific keyword, search for restaurants
+            params["query"] = "restaurant"
 
         # Make API call
         response = await self.get("/places/search", params=params)
@@ -87,7 +93,6 @@ class FoursquareClient(CacheableAPIClient):
             data=restaurants,
             response_time_ms=response.response_time_ms
         )
-
     def _convert_foursquare_to_restaurant(self, place_data) -> Optional[Restaurant]:
         """Convert Foursquare place to Restaurant model"""
 
@@ -129,40 +134,92 @@ class FoursquareClient(CacheableAPIClient):
         return restaurant
 
     def _is_restaurant_category(self, categories) -> bool:
-        """Check if this place is a restaurant"""
+        """Check if this place is a restaurant with improved detection"""
+
+        # Restaurant-related keywords (more comprehensive)
         restaurant_keywords = [
-            "restaurant", "cafe", "bar", "pizza", "burger", "mexican",
-            "italian", "chinese", "japanese", "thai", "indian", "sushi"
+            # Direct restaurant types
+            "restaurant", "cafe", "café", "bistro", "diner", "eatery",
+            "dining", "grill", "kitchen", "bar", "pub", "tavern",
+
+            # Cuisine types
+            "pizza", "burger", "mexican", "italian", "chinese",
+            "japanese", "thai", "indian", "sushi", "barbecue",
+            "steakhouse", "seafood", "american", "french",
+
+            # Food service types
+            "fast food", "food truck", "bakery", "coffee", "sandwich",
+            "noodle", "curry", "ramen", "taco", "wings"
         ]
 
         for category in categories:
             category_name = category.get("name", "").lower()
+
+            # Check if any restaurant keyword is in the category name
             if any(keyword in category_name for keyword in restaurant_keywords):
                 return True
+
+            # Special cases
+            if "lounge" in category_name and "hotel" not in category_name:
+                return True  # Standalone lounges often serve food
+
         return False
 
     def _map_foursquare_category(self, categories):
-        """Map Foursquare categories to our RestaurantCategory enum"""
+        """Map Foursquare categories to our RestaurantCategory enum with better coverage"""
         from ....models.restaurant import RestaurantCategory
 
-        # This is a simplified mapping - you'll want to expand this
+        # More comprehensive mapping
         category_mapping = {
+            # Cuisine types
             "mexican": RestaurantCategory.MEXICAN,
             "italian": RestaurantCategory.ITALIAN,
             "chinese": RestaurantCategory.CHINESE,
             "japanese": RestaurantCategory.JAPANESE,
             "sushi": RestaurantCategory.SUSHI,
-            "cafe": RestaurantCategory.CAFE,
-            "coffee": RestaurantCategory.CAFE,
+            "thai": RestaurantCategory.THAI,
+            "indian": RestaurantCategory.INDIAN,
+            "french": RestaurantCategory.FRENCH,
             "american": RestaurantCategory.AMERICAN,
             "mediterranean": RestaurantCategory.MEDITERRANEAN,
+            "korean": RestaurantCategory.KOREAN,
+            "vietnamese": RestaurantCategory.VIETNAMESE,
+
+            # Food types
+            "pizza": RestaurantCategory.PIZZA,
+            "burger": RestaurantCategory.AMERICAN,
+            "steakhouse": RestaurantCategory.STEAKHOUSE,
+            "seafood": RestaurantCategory.SEAFOOD,
+            "barbecue": RestaurantCategory.BBQ,
+            "bbq": RestaurantCategory.BBQ,
+
+            # Service types
+            "cafe": RestaurantCategory.CAFE,
+            "café": RestaurantCategory.CAFE,
+            "coffee": RestaurantCategory.CAFE,
+            "bar": RestaurantCategory.BAR,
+            "fast food": RestaurantCategory.FAST_FOOD,
+            "bakery": RestaurantCategory.BAKERY,
+
+            # Generic
+            "restaurant": RestaurantCategory.AMERICAN,
+            "dining": RestaurantCategory.AMERICAN,
+            "grill": RestaurantCategory.AMERICAN
         }
 
         for category in categories:
             category_name = category.get("name", "").lower()
+
+            # Direct mapping
             for keyword, enum_value in category_mapping.items():
                 if keyword in category_name:
                     return enum_value
+
+            # Special patterns
+            if "new american" in category_name:
+                return RestaurantCategory.AMERICAN
+            elif "hotel bar" in category_name:
+                return RestaurantCategory.BAR
 
         return RestaurantCategory.AMERICAN  # Default fallback
 
