@@ -131,39 +131,58 @@ class OutputFormatterNode(BaseNode):
 
         return min(final_confidence, 1.0)
 
-    def _format_recommendation_for_api(self, recommendation: Recommendation) -> Dict[str, Any]:
-        """Format single recommendation for API response"""
+    def _format_recommendation_for_api(self, rec: Recommendation) -> Dict[str, Any]:
+        """Format recommendation for API response without exposing 0.0 ratings"""
 
-        restaurant = recommendation.restaurant
+        restaurant = rec.restaurant
 
         return {
-            "rank": recommendation.rank,
+            "id": str(rec.id),
             "restaurant": {
                 "place_id": restaurant.place_id,
                 "name": restaurant.name,
                 "cuisine": restaurant.primary_category.value,
-                "rating": restaurant.rating,
+                "rating": restaurant.rating if restaurant.rating > 0 else None,
+                "user_ratings_total": restaurant.user_ratings_total if restaurant.user_ratings_total > 0 else None,
                 "price_level": restaurant.price_level.value if restaurant.price_level else None,
-                "price_symbol": restaurant.price_level.symbol if restaurant.price_level else None,
                 "address": restaurant.formatted_address,
                 "phone": restaurant.phone_number,
                 "website": restaurant.website,
-                "is_open_now": restaurant.is_open_now,
+                "photos": restaurant.photos[:3] if restaurant.photos else [],
                 "location": {
                     "lat": restaurant.location.latitude,
                     "lng": restaurant.location.longitude
-                }
+                },
+                "features": restaurant.features.dict() if restaurant.features else {},
+                "opening_hours": restaurant.opening_hours.dict() if restaurant.opening_hours else None
             },
             "recommendation": {
-                "score": round(recommendation.score.total_score, 3),
-                "confidence": round(recommendation.confidence, 3),
-                "explanation": recommendation.explanation,
-                "reasons": [reason.value for reason in recommendation.primary_reasons]
+                "rank": rec.rank,
+                "score": round(rec.total_score, 3),
+                "confidence": round(rec.confidence, 3),
+                "explanation": rec.explanation,
+                "reasons": [reason.value for reason in rec.primary_reasons],
+                "novelty": round(rec.novelty_score, 3) if hasattr(rec, 'novelty_score') else 0.0
             },
             "score_breakdown": {
-                "preference_match": round(recommendation.score.preference_score, 3),
-                "context_relevance": round(recommendation.score.context_score, 3),
-                "quality": round(recommendation.score.quality_score, 3),
-                "boost": round(recommendation.score.boost_score, 3)
+                "preference_match": round(rec.score.preference_score, 3),
+                "context_relevance": round(rec.score.context_score, 3),
+                "quality": round(rec.score.quality_score, 3),
+                "boost": round(rec.score.boost_score, 3)
             }
         }
+
+    def _format_recommendation_for_display(self, rec: Recommendation) -> str:
+        """Format recommendation for console display without showing 0.0 ratings"""
+
+        restaurant = rec.restaurant
+
+        # Format rating - hide if 0.0
+        rating_str = f"⭐ {restaurant.rating}/5" if restaurant.rating > 0 else "⭐ New"
+
+        # Format price - hide if None
+        price_str = restaurant.price_level.symbol if restaurant.price_level else "Price varies"
+
+        return (f"  {rec.rank}. {restaurant.name} ({restaurant.primary_category.value})\n"
+                f"     {rating_str} | {price_str} | Score: {rec.score.total_score:.3f}\n"
+                f"     💡 {rec.explanation}")

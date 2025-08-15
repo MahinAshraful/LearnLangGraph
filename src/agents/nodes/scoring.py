@@ -100,10 +100,15 @@ class ScoringNode(BaseNode):
             # Sort by total score
             scored_recommendations.sort(key=lambda r: r.score.total_score, reverse=True)
 
+            # Add diversity to break ties
+            scored_recommendations = self._add_diversity_factor(scored_recommendations)
+
+            # Re-sort after diversity adjustment
+            scored_recommendations.sort(key=lambda r: r.score.total_score, reverse=True)
+
             # Assign ranks
             for i, rec in enumerate(scored_recommendations, 1):
                 rec.rank = i
-
             logger.info(f"Scored {len(scored_recommendations)} restaurants")
             print(f"DEBUG SCORING: Returning {len(scored_recommendations)} scored recommendations")
 
@@ -473,25 +478,26 @@ class ScoringNode(BaseNode):
 
         return reasons[:3]  # Limit to top 3 reasons
 
-    def _generate_explanation(self,
-                              restaurant: Restaurant,
-                              score_breakdown: ScoreBreakdown,
+    def _generate_explanation(self, restaurant: Restaurant, score_breakdown: ScoreBreakdown,
                               reasons: List[RecommendationReason]) -> str:
-        """Generate human-readable explanation"""
+        """Generate human-readable explanation without showing missing data"""
 
         explanations = []
 
-        # Start with restaurant basics
-        rating_text = f"rated {restaurant.rating}/5.0"
-        if restaurant.user_ratings_total >= 100:
-            rating_text += f" by {restaurant.user_ratings_total}+ customers"
-
-        explanations.append(f"{restaurant.name} is {rating_text}")
+        # Start with restaurant basics - hide 0.0 ratings
+        if restaurant.rating > 0:
+            rating_text = f"rated {restaurant.rating}/5.0"
+            if restaurant.user_ratings_total >= 100:
+                rating_text += f" by {restaurant.user_ratings_total}+ customers"
+            explanations.append(f"{restaurant.name} is {rating_text}")
+        else:
+            explanations.append(f"{restaurant.name} is a popular choice")
 
         # Add reason-based explanations
         reason_texts = {
             RecommendationReason.CUISINE_MATCH: f"matches your {restaurant.primary_category.value} preference",
-            RecommendationReason.PRICE_MATCH: f"fits your budget ({restaurant.price_level.symbol if restaurant.price_level else 'affordable'})",
+            RecommendationReason.PRICE_MATCH: f"fits your budget" + (
+                f" ({restaurant.price_level.symbol})" if restaurant.price_level else ""),
             RecommendationReason.HIGHLY_RATED: "has excellent reviews",
             RecommendationReason.POPULAR_CHOICE: "is a popular choice",
             RecommendationReason.HAS_REQUIRED_FEATURES: "has the features you requested",
@@ -501,7 +507,7 @@ class ScoringNode(BaseNode):
             RecommendationReason.MATCHES_OCCASION: "is perfect for the occasion"
         }
 
-        for reason in reasons[:2]:  # Top 2 reasons
+        for reason in reasons[:2]:
             if reason in reason_texts:
                 explanations.append(reason_texts[reason])
 
@@ -573,3 +579,31 @@ class ScoringNode(BaseNode):
             "scoring_weights": SCORING_WEIGHTS,
             **self.get_performance_stats()
         }
+
+    # Add this method to ScoringNode class
+
+    def _add_diversity_factor(self, recommendations: List[Recommendation]) -> List[Recommendation]:
+        """Add small diversity factors to break score ties"""
+
+        import random
+
+        # Group by identical scores
+        score_groups = {}
+        for rec in recommendations:
+            score_key = round(rec.score.total_score, 4)
+            if score_key not in score_groups:
+                score_groups[score_key] = []
+            score_groups[score_key].append(rec)
+
+        # Add small random diversity factors to component scores to break ties
+        for score, group in score_groups.items():
+            if len(group) > 1:  # Multiple restaurants with same score
+                for i, rec in enumerate(group):
+                    # Add small diversity factor to boost_score (smallest component)
+                    diversity_factor = (i * 0.001) + (random.random() * 0.001)
+                    rec.score.boost_score = min(rec.score.boost_score + diversity_factor, 1.0)
+                    print(f"DEBUG SCORING: Added diversity {diversity_factor:.4f} to {rec.restaurant.name}")
+
+        return recommendations
+
+
