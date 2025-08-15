@@ -23,51 +23,79 @@ class ScoringNode(BaseNode):
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
         """Score all candidate restaurants using weighted algorithm"""
 
+        print(f"DEBUG SCORING: Starting scoring node execution")
+
         candidate_restaurants = state.get("candidate_restaurants", [])
         parsed_query = state.get("parsed_query")
         user_preferences = state.get("user_preferences")
         similar_users = state.get("similar_users", [])
         collaborative_restaurants = state.get("collaborative_restaurants", [])
 
+        print(f"DEBUG SCORING: Found {len(candidate_restaurants)} candidate restaurants")
+        print(f"DEBUG SCORING: Parsed query available: {parsed_query is not None}")
+
         if not candidate_restaurants:
+            print("DEBUG SCORING: No candidate restaurants to score")
             return self._handle_error(state, "No candidate restaurants to score")
 
         if not parsed_query:
+            print("DEBUG SCORING: No parsed query available")
             return self._handle_error(state, "No parsed query available for scoring")
 
         try:
             scored_recommendations = []
 
-            for restaurant in candidate_restaurants:
-                # Calculate all score components
-                score_breakdown = await self._calculate_score_breakdown(
-                    restaurant=restaurant,
-                    parsed_query=parsed_query,
-                    user_preferences=user_preferences,
-                    similar_users=similar_users,
-                    collaborative_restaurants=collaborative_restaurants
-                )
+            for i, restaurant in enumerate(candidate_restaurants):
+                print(f"DEBUG SCORING: Processing restaurant {i + 1}: {restaurant.name}")
+                print(f"DEBUG SCORING: Restaurant price_level: {restaurant.price_level}")
+                print(f"DEBUG SCORING: Restaurant rating: {restaurant.rating}")
 
-                # Generate reasoning
-                reasons = self._generate_recommendation_reasons(restaurant, score_breakdown, parsed_query)
-                explanation = self._generate_explanation(restaurant, score_breakdown, reasons)
+                try:
+                    # Calculate all score components
+                    score_breakdown = await self._calculate_score_breakdown(
+                        restaurant=restaurant,
+                        parsed_query=parsed_query,
+                        user_preferences=user_preferences,
+                        similar_users=similar_users,
+                        collaborative_restaurants=collaborative_restaurants
+                    )
+                    print(f"DEBUG SCORING: Score breakdown calculated successfully for {restaurant.name}")
 
-                # Calculate confidence based on data completeness
-                confidence = self._calculate_confidence(score_breakdown, user_preferences)
+                    # Generate reasoning
+                    reasons = self._generate_recommendation_reasons(restaurant, score_breakdown, parsed_query)
+                    explanation = self._generate_explanation(restaurant, score_breakdown, reasons)
 
-                # Create recommendation
-                recommendation = Recommendation(
-                    id=EntityId(),
-                    restaurant=restaurant,
-                    score=score_breakdown,
-                    primary_reasons=reasons,
-                    explanation=explanation,
-                    confidence=confidence,
-                    rank=1,  # Will be set after sorting
-                    strategy_used="hybrid"
-                )
+                    # Calculate confidence based on data completeness
+                    confidence = self._calculate_confidence(score_breakdown, user_preferences)
 
-                scored_recommendations.append(recommendation)
+                    # Create recommendation
+                    recommendation = Recommendation(
+                        id=EntityId(),
+                        restaurant=restaurant,
+                        score=score_breakdown,
+                        primary_reasons=reasons,
+                        explanation=explanation,
+                        confidence=confidence,
+                        rank=1,  # Will be set after sorting
+                        strategy_used="hybrid"
+                    )
+
+                    scored_recommendations.append(recommendation)
+                    print(
+                        f"DEBUG SCORING: Successfully scored {restaurant.name} with score {score_breakdown.total_score}")
+
+                except Exception as e:
+                    print(f"DEBUG SCORING: Failed to score restaurant {restaurant.name}: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    # Continue with next restaurant instead of failing entirely
+
+            print(
+                f"DEBUG SCORING: Successfully scored {len(scored_recommendations)} out of {len(candidate_restaurants)} restaurants")
+
+            if not scored_recommendations:
+                print("DEBUG SCORING: No restaurants were successfully scored!")
+                return self._handle_error(state, "Failed to score any restaurants")
 
             # Sort by total score
             scored_recommendations.sort(key=lambda r: r.score.total_score, reverse=True)
@@ -77,12 +105,16 @@ class ScoringNode(BaseNode):
                 rec.rank = i
 
             logger.info(f"Scored {len(scored_recommendations)} restaurants")
+            print(f"DEBUG SCORING: Returning {len(scored_recommendations)} scored recommendations")
 
             return {
                 "scored_recommendations": scored_recommendations
             }
 
         except Exception as e:
+            print(f"DEBUG SCORING: Overall scoring failed: {e}")
+            import traceback
+            traceback.print_exc()
             logger.error(f"Scoring failed: {e}")
             return self._handle_error(state, f"Failed to score recommendations: {str(e)}")
 
@@ -134,24 +166,43 @@ class ScoringNode(BaseNode):
                     score_breakdown.cuisine_match = 1.0
                     break
 
-        # Price match
+        # Price match - FIXED to handle None price_level
         score_breakdown.price_match = 0.0
-        if parsed_query.price_preferences and restaurant.price_level:
-            if restaurant.price_level in parsed_query.price_preferences:
+
+        # If restaurant has no price info, give neutral score instead of 0
+        if restaurant.price_level is None:
+            print(f"DEBUG SCORING: No price info for {restaurant.name}, using neutral score")
+            if parsed_query.price_preferences:
+                # If user specified price preference but restaurant has no price, slight penalty
+                score_breakdown.price_match = 0.5
+            else:
+                # If no price preference, no penalty for missing price
+                score_breakdown.price_match = 0.7
+        else:
+            # Restaurant has price info
+            if parsed_query.price_preferences and restaurant.price_level in parsed_query.price_preferences:
                 score_breakdown.price_match = 1.0
-        elif user_preferences and user_preferences.preferred_price_levels and restaurant.price_level:
-            if restaurant.price_level in user_preferences.preferred_price_levels:
+            elif user_preferences and user_preferences.preferred_price_levels and restaurant.price_level in user_preferences.preferred_price_levels:
                 score_breakdown.price_match = 0.8
+            else:
+                # Has price info but doesn't match preferences
+                score_breakdown.price_match = 0.3
 
         # Rating score
         score_breakdown.rating_score = 0.0
         if restaurant.rating > 0:
             score_breakdown.rating_score = min((restaurant.rating - 1) / 4, 1.0)
+        else:
+            print(f"DEBUG SCORING: No rating for {restaurant.name}, using neutral score")
+            score_breakdown.rating_score = 0.5  # Neutral score for missing rating
 
         # Popularity score
         score_breakdown.popularity_score = 0.0
         if restaurant.user_ratings_total > 0:
             score_breakdown.popularity_score = min(math.log(restaurant.user_ratings_total + 1) / math.log(1000), 1.0)
+        else:
+            print(f"DEBUG SCORING: No user ratings for {restaurant.name}, using neutral score")
+            score_breakdown.popularity_score = 0.4  # Neutral score for missing popularity
 
         # Collaborative score
         score_breakdown.collaborative_score = 0.0
@@ -159,30 +210,8 @@ class ScoringNode(BaseNode):
         if restaurant.place_id in collaborative_restaurants:
             score_breakdown.collaborative_score = 0.8
 
-        # Time appropriateness
-        score_breakdown.time_appropriateness = 0.7  # Default
-        if parsed_query.time_preference.urgency == "now":
-            score_breakdown.time_appropriateness = 1.0 if restaurant.is_open_now else 0.2
-        elif parsed_query.time_preference.urgency == "soon":
-            score_breakdown.time_appropriateness = 0.9 if restaurant.is_open_now else 0.6
-
-        # Feature match
-        score_breakdown.feature_match = 0.5  # Default neutral
-        if parsed_query.required_features:
-            matched_features = sum(1 for feature in parsed_query.required_features
-                                   if self._restaurant_has_feature(restaurant, feature))
-            score_breakdown.feature_match = matched_features / len(parsed_query.required_features)
-
-        # Occasion match
-        score_breakdown.occasion_match = 0.7  # Default neutral
-        occasion = parsed_query.social_context.occasion
-        if occasion:
-            if "date" in occasion.lower() or "romantic" in occasion.lower():
-                score_breakdown.occasion_match = 0.9 if restaurant.features.romantic else 0.5
-            elif "business" in occasion.lower():
-                score_breakdown.occasion_match = 0.9 if "expensive" in str(restaurant.features) else 0.6
-            elif "family" in occasion.lower():
-                score_breakdown.occasion_match = 0.9 if restaurant.features.good_for_kids else 0.4
+        print(
+            f"DEBUG SCORING: {restaurant.name} scores - cuisine:{score_breakdown.cuisine_match:.2f} price:{score_breakdown.price_match:.2f} rating:{score_breakdown.rating_score:.2f} popularity:{score_breakdown.popularity_score:.2f}")
 
     def _calculate_preference_score(self,
                                     restaurant: Restaurant,
