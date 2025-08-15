@@ -410,13 +410,16 @@ async def demo_workflow():
             print(f"\n✅ {data['message']}")
             print(f"\n📍 Top Recommendations:")
 
-            for rec in data["recommendations"][:3]:  # Show top 3
-                restaurant = rec["restaurant"]
-                recommendation = rec["recommendation"]
+            recommendations = data.get("recommendations", [])
+            if recommendations:
+                for i, rec_dict in enumerate(recommendations[:3], 1):
+                    restaurant = rec_dict["restaurant"]
+                    recommendation = rec_dict["recommendation"]
 
-                print(f"  {rec['rank']}. {restaurant['name']} ({restaurant['cuisine']})")
-                print(f"     ⭐ {restaurant['rating']}/5 | {restaurant.get('price_symbol', '$')} | Score: {recommendation['score']}")
-                print(f"     💡 {recommendation['explanation']}")
+                    print(f"  {i}. {restaurant['name']} ({restaurant['cuisine']})")
+                    print(
+                        f"     ⭐ {restaurant['rating']}/5 | {restaurant.get('price_level', 'Price varies')} | Score: {recommendation['score']}")
+                    print(f"     💡 {recommendation['explanation']}")
 
             print(f"\n⚡ Performance:")
             print(f"  Processing Time: {perf['processing_time_ms']:.0f}ms")

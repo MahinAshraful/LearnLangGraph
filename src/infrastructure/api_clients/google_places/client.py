@@ -38,17 +38,16 @@ class NearbySearchRequest:
 class GooglePlacesClient(CacheableAPIClient):
     """Google Places API client with mock and real implementations"""
 
-    def __init__(self, api_key: Optional[str] = None, cache_adapter=None, use_mock: bool = True):
-        settings = get_settings()
-
-        self.api_key = api_key or settings.api.google_places_api_key
-        self.use_mock = use_mock or not self.api_key
+    def __init__(self, api_key: str = None, cache_adapter=None, use_mock: bool = None):
+        self.settings = get_settings()
+        self.api_key = api_key or self.settings.api.google_places_api_key
+        self.use_mock = use_mock if use_mock is not None else not self.api_key
 
         super().__init__(
             cache_adapter=cache_adapter,
             base_url=GOOGLE_PLACES_BASE_URL,
             api_key=self.api_key,
-            rate_limit_per_minute=settings.api.api_rate_limits.get("google_places", 100),
+            rate_limit_per_minute=self.settings.api.api_rate_limits.get("google_places", 100),
             timeout_seconds=30
         )
 
@@ -327,24 +326,7 @@ class GooglePlacesClient(CacheableAPIClient):
             is_usually_busy_now=random.choice([True, False, None])
         )
 
-        return Restaurant(
-            place_id=place_id,
-            name=name,
-            location=location,
-            primary_category=primary_category,
-            google_types=types,
-            price_level=PriceLevel(price_level) if price_level else None,
-            rating=rating,
-            user_ratings_total=user_ratings_total,
-            phone_number=place_data.get("formatted_phone_number"),
-            website=place_data.get("website"),
-            formatted_address=place_data.get("formatted_address", ""),
-            opening_hours=opening_hours,
-            features=features,
-            popularity=popularity,
-            photos=photos,
-            data_source="google_places"
-        )
+        return Restaurant.from_google_places(place_data)
 
     def _map_google_types_to_category(self, types: List[str]) -> RestaurantCategory:
         """Map Google Places types to our restaurant categories"""

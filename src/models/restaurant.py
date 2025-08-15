@@ -203,6 +203,84 @@ class Restaurant(BaseModel):
             data['last_updated'] = datetime.utcnow()
         super().__init__(**data)
 
+    @classmethod
+    def from_google_places(cls, place_data: Dict[str, Any]) -> 'Restaurant':
+        """Create Restaurant from Google Places API response"""
+
+        # Extract location from geometry.location
+        location_data = place_data.get("geometry", {}).get("location", {})
+        location = Location(
+            latitude=location_data.get("lat", 0.0),
+            longitude=location_data.get("lng", 0.0),
+            address=place_data.get("vicinity", ""),
+        )
+
+        # Map price_level (1-4) to PriceLevel enum
+        price_level = place_data.get("price_level")
+        price_enum = PriceLevel(price_level) if price_level else None
+
+        # Map types to category
+        types = place_data.get("types", [])
+        name = place_data["name"]
+        category = Restaurant._detect_cuisine_from_name(name, types)
+
+
+        return cls(
+            place_id=place_data["place_id"],
+            name=place_data["name"],
+            location=location,
+            primary_category=category,
+            price_level=price_enum,
+            rating=place_data.get("rating", 0.0),
+            user_ratings_total=place_data.get("user_ratings_total", 0),
+            phone_number=place_data.get("formatted_phone_number"),
+            website=place_data.get("website"),
+            formatted_address=place_data.get("formatted_address", place_data.get("vicinity", "")),
+            opening_hours=None,
+            features=RestaurantFeatures(),
+            popularity=PopularityData(current_popularity=None),
+            photos=[],
+            data_source="google_places",
+        )
+
+    @staticmethod
+    def _detect_cuisine_from_name(name: str, types: List[str]) -> RestaurantCategory:
+        """Detect cuisine from restaurant name"""
+
+        name_lower = name.lower()
+
+        # Mexican indicators
+        if any(word in name_lower for word in ['taco', 'burrito', 'mexican', 'tequila', 'mariachi']):
+            return RestaurantCategory.MEXICAN
+
+        # Japanese indicators
+        if any(word in name_lower for word in ['sushi', 'yakitori', 'ramen', 'japanese', 'sake']):
+            return RestaurantCategory.JAPANESE
+
+        # Italian indicators
+        if any(word in name_lower for word in ['pizza', 'italian', 'pasta', 'trattoria']):
+            return RestaurantCategory.ITALIAN
+
+        # Fallback to type-based detection
+        return Restaurant._map_google_types_to_category(types)
+
+    @staticmethod
+    def _map_google_types_to_category(types: List[str]) -> RestaurantCategory:
+        """Map Google Places types to RestaurantCategory with name-based fallback"""
+
+        # Google Places doesn't return cuisine-specific types in basic search
+        # Default to AMERICAN for restaurants
+        if "restaurant" in types:
+            return RestaurantCategory.AMERICAN
+        elif "meal_takeaway" in types:
+            return RestaurantCategory.FAST_FOOD
+        elif "cafe" in types:
+            return RestaurantCategory.CAFE
+        elif "bar" in types:
+            return RestaurantCategory.BAR
+        else:
+            return RestaurantCategory.AMERICAN
+
     @field_validator('rating')
     @classmethod
     def validate_rating(cls, v):

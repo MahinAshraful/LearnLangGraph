@@ -1,3 +1,5 @@
+# src/infrastructure/api_clients/places_factory.py
+
 from typing import Optional
 from .google_places.client import GooglePlacesClient
 from .foursquare.client import FoursquareClient
@@ -9,43 +11,65 @@ class PlacesClientFactory:
 
     @staticmethod
     def create_client(provider: str = "auto", cache_adapter=None, **kwargs):
+        """Create places API client based on provider and available keys"""
+
         settings = get_settings()
 
-        # DEBUG PRINTS
+        # Debug logging
         print(f"DEBUG FACTORY: provider={provider}")
-        print(f"DEBUG FACTORY: settings.api.foursquare_api_key={repr(settings.api.foursquare_api_key)}")
+        print(f"DEBUG FACTORY: google_places_api_key={'[SET]' if settings.api.google_places_api_key else '[NOT SET]'}")
+        print(f"DEBUG FACTORY: foursquare_api_key={'[SET]' if settings.api.foursquare_api_key else '[NOT SET]'}")
 
         if provider == "auto":
-            if settings.api.foursquare_api_key:
-                provider = "foursquare"
-                print(f"DEBUG FACTORY: Auto-selected foursquare")
-            elif settings.api.google_places_api_key:
-                provider = "google"
-                print(f"DEBUG FACTORY: Auto-selected google")
+            # Priority: Google Places > Foursquare > Mock
+            if settings.api.google_places_api_key:
+                print("DEBUG FACTORY: Auto-selected google")
+                return GooglePlacesClient(
+                    api_key=settings.api.google_places_api_key,
+                    cache_adapter=cache_adapter,
+                    use_mock=False,
+                    **kwargs
+                )
+            elif settings.api.foursquare_api_key:
+                print("DEBUG FACTORY: Auto-selected foursquare")
+                return FoursquareClient(
+                    api_key=settings.api.foursquare_api_key,
+                    cache_adapter=cache_adapter,
+                    **kwargs
+                )
             else:
-                provider = "mock"
-                print(f"DEBUG FACTORY: Auto-selected mock")
+                print("DEBUG FACTORY: Auto-selected mock (no API keys)")
+                return GooglePlacesClient(
+                    cache_adapter=cache_adapter,
+                    use_mock=True,
+                    **kwargs
+                )
 
-        if provider == "foursquare":
-            print(f"DEBUG FACTORY: Creating FoursquareClient with key={repr(settings.api.foursquare_api_key)}")
+        elif provider == "google":
+            print("DEBUG FACTORY: Creating GooglePlacesClient")
+            return GooglePlacesClient(
+                api_key=settings.api.google_places_api_key,
+                cache_adapter=cache_adapter,
+                use_mock=not settings.api.google_places_api_key,
+                **kwargs
+            )
+
+        elif provider == "foursquare":
+            print(f"DEBUG FACTORY: Creating FoursquareClient")
             return FoursquareClient(
                 api_key=settings.api.foursquare_api_key,
                 cache_adapter=cache_adapter,
                 **kwargs
             )
-        # ... rest of method
-        elif provider == "google":
-            return GooglePlacesClient(
-                api_key=settings.api.google_places_api_key,
-                cache_adapter=cache_adapter,
-                use_mock=False,
-                **kwargs
-            )
+
         elif provider == "mock":
+            print("DEBUG FACTORY: Creating Mock GooglePlacesClient")
             return GooglePlacesClient(
                 cache_adapter=cache_adapter,
                 use_mock=True,
                 **kwargs
             )
+
         else:
-            raise ValueError(f"Unknown places provider: {provider}")
+            raise ValueError(
+                f"Unknown places provider: {provider}. Valid options: 'auto', 'google', 'foursquare', 'mock'")
