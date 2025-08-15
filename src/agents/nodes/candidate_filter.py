@@ -45,23 +45,33 @@ class CandidateFilterNode(BaseNode):
     def _apply_quality_filter(self, restaurants: List[Restaurant]) -> List[Restaurant]:
         """Apply minimum quality standards"""
 
+        print(f"DEBUG FILTER: Quality filter input: {len(restaurants)} restaurants")
         filtered = []
 
         for restaurant in restaurants:
-            # Minimum rating threshold
-            if restaurant.rating < 3.0:
-                continue
+            # Handle missing rating data gracefully
+            if restaurant.rating > 0:  # Has real rating data
+                if restaurant.rating < 3.0:  # Poor rating
+                    print(f"DEBUG FILTER: Filtered out {restaurant.name} - low rating ({restaurant.rating})")
+                    continue
+            # If rating is 0 or missing, assume neutral (don't filter out)
 
-            # Minimum review count for reliability
-            if restaurant.user_ratings_total < 5:
-                continue
+            # Handle missing review count gracefully
+            if restaurant.user_ratings_total > 0:  # Has real review data
+                if restaurant.user_ratings_total < 5:  # Too few reviews
+                    print(
+                        f"DEBUG FILTER: Filtered out {restaurant.name} - few reviews ({restaurant.user_ratings_total})")
+                    continue
+            # If review count is 0 or missing, assume neutral (don't filter out)
 
             # Skip permanently closed restaurants
             if hasattr(restaurant, 'permanently_closed') and restaurant.permanently_closed:
+                print(f"DEBUG FILTER: Filtered out {restaurant.name} - permanently closed")
                 continue
 
             filtered.append(restaurant)
 
+        print(f"DEBUG FILTER: Quality filter output: {len(filtered)} restaurants")
         logger.debug(f"Quality filter: {len(restaurants)} → {len(filtered)}")
         return filtered
 
