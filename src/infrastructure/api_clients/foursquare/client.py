@@ -18,15 +18,18 @@ class FoursquareClient(CacheableAPIClient):
         settings = get_settings()
         print(f"DEBUG FOURSQUARE: settings.api.foursquare_api_key: {repr(settings.api.foursquare_api_key)}")
 
-        self.api_key = api_key or settings.api.foursquare_api_key
-        print(f"DEBUG FOURSQUARE: Final self.api_key: {repr(self.api_key)}")
+        # Get the API key first
+        resolved_api_key = api_key or settings.api.foursquare_api_key
+        print(f"DEBUG FOURSQUARE: Resolved api_key: {repr(resolved_api_key)}")
 
-        if not self.api_key:
+        if not resolved_api_key:
             raise ValueError("Foursquare API key is required")
 
+        # IMPORTANT: Pass api_key to parent constructor so it doesn't get overwritten
         super().__init__(
             cache_adapter=cache_adapter,
             base_url="https://places-api.foursquare.com",
+            api_key=resolved_api_key,  # ← This was missing!
             rate_limit_per_minute=settings.api.api_rate_limits.get("foursquare", 950),
             timeout_seconds=30
         )
@@ -40,12 +43,13 @@ class FoursquareClient(CacheableAPIClient):
             logger.error("API key is None!")
             raise ValueError("Foursquare API key is required")
 
-        # Remove fsq3 prefix if present
+        # Remove fsq3 prefix if present (Foursquare uses this prefix for identification)
         api_key_without_prefix = self.api_key
         if self.api_key.startswith("fsq3"):
-            api_key_without_prefix = self.api_key[4:]
+            api_key_without_prefix = self.api_key[4:]  # Remove "fsq3" prefix
+            logger.debug(f"Removed fsq3 prefix from API key")
 
-        # Return Foursquare-specific headers (don't call super() to avoid conflicts)
+        # Return Foursquare-specific headers
         headers = {
             "Content-Type": "application/json",
             "User-Agent": "RestaurantRecommender/1.0.0",

@@ -300,7 +300,7 @@ class RestaurantRecommendationWorkflow:
 
 async def create_restaurant_recommendation_workflow(
         openai_api_key: str,
-        use_mock_services: bool = True,
+        use_mock_services: bool = False,
         cache_adapter=None
 ) -> RestaurantRecommendationWorkflow:
     """Factory function to create and initialize the workflow"""
