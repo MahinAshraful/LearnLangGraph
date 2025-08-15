@@ -95,7 +95,7 @@ class DataRetrievalNode(BaseNode):
                 keyword=keyword,
                 min_price=self._get_min_price(parsed_query),
                 max_price=self._get_max_price(parsed_query),
-                open_now=parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]
+                open_now=False  # Temporarily disable for testing
             )]
 
         elif parsed_query.cuisine_preferences and len(parsed_query.cuisine_preferences) > 1:
@@ -110,7 +110,7 @@ class DataRetrievalNode(BaseNode):
                     keyword=keyword,
                     min_price=self._get_min_price(parsed_query),
                     max_price=self._get_max_price(parsed_query),
-                    open_now=parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]
+                    open_now=False  # Temporarily disable for testing
                 ))
 
             return requests
@@ -137,7 +137,7 @@ class DataRetrievalNode(BaseNode):
                 keyword=keyword,
                 min_price=self._get_min_price(parsed_query),
                 max_price=self._get_max_price(parsed_query),
-                open_now=parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]
+                open_now=False  # Temporarily disable for testing
             )]
 
     def _calculate_search_radius(self, parsed_query: ParsedQuery) -> int:
