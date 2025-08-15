@@ -260,9 +260,18 @@ class DataRetrievalNode(BaseNode):
         for restaurant in restaurants:
             print(
                 f"  {restaurant.name}: {restaurant.primary_category.value}, price={restaurant.price_level.value if restaurant.price_level else None}")
-            # Basic quality filter
-            if restaurant.rating < 3.0 or restaurant.user_ratings_total < 10:
-                continue
+
+            # FIXED: Handle missing rating/review data gracefully
+            # Only apply quality filter if restaurant has real data
+            if restaurant.rating > 0:  # Has real rating data
+                if restaurant.rating < 3.0:
+                    print(f"    FILTERED: Low rating ({restaurant.rating})")
+                    continue
+
+            if restaurant.user_ratings_total > 0:  # Has real review data
+                if restaurant.user_ratings_total < 10:
+                    print(f"    FILTERED: Few reviews ({restaurant.user_ratings_total})")
+                    continue
 
             # Cuisine filter (if Google Places didn't filter properly)
             if parsed_query.cuisine_preferences:
@@ -271,26 +280,32 @@ class DataRetrievalNode(BaseNode):
                     for cuisine in parsed_query.cuisine_preferences
                 )
                 if not cuisine_match:
+                    print(f"    FILTERED: Cuisine mismatch")
                     continue
 
             # Price filter (if Google Places didn't filter properly)
             if parsed_query.price_preferences and restaurant.price_level:
                 if restaurant.price_level not in parsed_query.price_preferences:
+                    print(f"    FILTERED: Price mismatch")
                     continue
 
             # Opening hours filter for urgent requests
             if (parsed_query.time_preference.urgency == Urgency.NOW and
                     not restaurant.is_open_now):
+                print(f"    FILTERED: Not open now")
                 continue
 
             # Required features filter (basic implementation)
             if parsed_query.required_features:
                 feature_match = self._check_feature_requirements(restaurant, parsed_query.required_features)
                 if not feature_match:
+                    print(f"    FILTERED: Missing features")
                     continue
 
+            print(f"    KEPT: {restaurant.name}")
             filtered.append(restaurant)
 
+        print(f"DEBUG FILTER: Output restaurants: {len(filtered)}")
         logger.debug(f"Applied filters: {len(restaurants)} -> {len(filtered)} restaurants")
         return filtered
 
