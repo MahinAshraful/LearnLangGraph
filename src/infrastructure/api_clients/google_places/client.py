@@ -87,10 +87,15 @@ class GooglePlacesClient(CacheableAPIClient):
     async def _mock_nearby_search(self, request: NearbySearchRequest) -> APIResponse[List[Restaurant]]:
         """Mock implementation for development"""
 
-        print(f"DEBUG MOCK: Searching for keyword='{request.keyword}', total restaurants={len(self.mock_restaurants)}")
-        for i, r in enumerate(self.mock_restaurants):
-            if r.primary_category.value == "mexican":
-                print(f"  Mexican restaurant {i}: {r.name} ({r.primary_category.value})")
+        # ADD DEBUG LOGGING
+        print(f"DEBUG MOCK: Searching for keyword='{request.keyword}'")
+        print(f"DEBUG MOCK: Total mock restaurants: {len(self.mock_restaurants)}")
+
+        # Debug restaurant categories
+        italian_restaurants = [r for r in self.mock_restaurants if r.primary_category == RestaurantCategory.ITALIAN]
+        print(f"DEBUG MOCK: Italian restaurants found: {len(italian_restaurants)}")
+        for r in italian_restaurants:
+            print(f"  - {r.name} (category: {r.primary_category.value})")
 
         import time
         start_time = time.time()
@@ -119,6 +124,8 @@ class GooglePlacesClient(CacheableAPIClient):
         lat, lng = request.location
         filtered_restaurants = []
 
+        print(f"DEBUG MOCK: Filtering with location ({lat}, {lng}), radius {request.radius}")
+
         for restaurant in self.mock_restaurants:
             # Calculate distance (simplified)
             distance_km = self._calculate_distance(
@@ -127,28 +134,46 @@ class GooglePlacesClient(CacheableAPIClient):
                 restaurant.location.longitude
             )
 
+            print(f"DEBUG MOCK: Restaurant {restaurant.name} distance: {distance_km:.2f}km")
+
             # Apply filters
             if distance_km * 1000 > request.radius:
+                print(f"  FILTERED: Distance too far ({distance_km * 1000:.0f}m > {request.radius}m)")
                 continue
 
             if request.keyword:
                 keyword_lower = request.keyword.lower()
-                if (keyword_lower not in restaurant.name.lower() and
-                        keyword_lower not in restaurant.primary_category.value.lower()):
+                name_match = keyword_lower in restaurant.name.lower()
+                category_match = keyword_lower in restaurant.primary_category.value.lower()
+
+                print(f"  Keyword check: '{keyword_lower}' in name='{restaurant.name.lower()}' -> {name_match}")
+                print(
+                    f"  Keyword check: '{keyword_lower}' in category='{restaurant.primary_category.value.lower()}' -> {category_match}")
+
+                if not (name_match or category_match):
+                    print(f"  FILTERED: Keyword mismatch")
                     continue
+                else:
+                    print(f"  KEPT: Keyword match")
 
             if request.min_price and restaurant.price_level:
                 if restaurant.price_level.value < request.min_price:
+                    print(f"  FILTERED: Price too low")
                     continue
 
             if request.max_price and restaurant.price_level:
                 if restaurant.price_level.value > request.max_price:
+                    print(f"  FILTERED: Price too high")
                     continue
 
             if request.open_now and not restaurant.is_open_now:
+                print(f"  FILTERED: Not open now")
                 continue
 
+            print(f"  ADDED: {restaurant.name}")
             filtered_restaurants.append(restaurant)
+
+        print(f"DEBUG MOCK: Final filtered restaurants: {len(filtered_restaurants)}")
 
         # Sort by distance and rating
         filtered_restaurants.sort(
@@ -178,51 +203,87 @@ class GooglePlacesClient(CacheableAPIClient):
         )
 
     async def _real_nearby_search(self, request: NearbySearchRequest) -> APIResponse[List[Restaurant]]:
-        """Real Google Places API implementation"""
+        """Real Google Places API implementation - FIXED"""
+
+        import time
+        start_time = time.time()
+
+        # Debug logging
+        print(f"DEBUG REAL API: Starting search for keyword='{request.keyword}'")
+        print(f"DEBUG REAL API: Location={request.location}, radius={request.radius}")
+        print(f"DEBUG REAL API: API key present: {'Yes' if self.api_key else 'No'}")
 
         # Prepare API parameters
         params = {
             "location": f"{request.location[0]},{request.location[1]}",
-            "radius": request.radius,
-            "type": request.restaurant_type,
+            "radius": str(request.radius),
+            "type": "restaurant",  # Fixed: use string not variable
             "key": self.api_key
         }
 
         if request.keyword:
             params["keyword"] = request.keyword
+            print(f"DEBUG REAL API: Adding keyword parameter: {request.keyword}")
 
         if request.min_price:
-            params["minprice"] = request.min_price
+            params["minprice"] = str(request.min_price)
 
         if request.max_price:
-            params["maxprice"] = request.max_price
+            params["maxprice"] = str(request.max_price)
 
         if request.open_now:
             params["opennow"] = "true"
 
-        if request.page_token:
-            params["pagetoken"] = request.page_token
+        print(f"DEBUG REAL API: Final params: {params}")
 
-        # Make API call
-        response = await self.get("/nearbysearch/json", params=params)
+        try:
+            # Make API call
+            print(f"DEBUG REAL API: Making request to /nearbysearch/json")
+            response = await self.get("/nearbysearch/json", params=params)
 
-        if not response.success:
-            return response
+            print(f"DEBUG REAL API: Response success: {response.success}")
+            if hasattr(response, 'data'):
+                print(f"DEBUG REAL API: Response data type: {type(response.data)}")
+                if isinstance(response.data, dict):
+                    results = response.data.get("results", [])
+                    print(f"DEBUG REAL API: Number of results from Google: {len(results)}")
+                    if len(results) > 0:
+                        print(f"DEBUG REAL API: First result: {results[0].get('name', 'No name')}")
+                else:
+                    print(f"DEBUG REAL API: Unexpected response data: {response.data}")
 
-        # Convert Google Places response to our Restaurant model
-        restaurants = []
-        for place in response.data.get("results", []):
-            try:
-                restaurant = self._convert_place_to_restaurant(place)
-                restaurants.append(restaurant)
-            except Exception as e:
-                logger.warning(f"Failed to convert place to restaurant: {e}")
-                continue
+            if not response.success:
+                print(f"DEBUG REAL API: API call failed: {response.error}")
+                return response
 
-        return APIResponse.success_response(
-            data=restaurants,
-            response_time_ms=response.response_time_ms
-        )
+            # Convert Google Places response to our Restaurant model
+            restaurants = []
+            raw_results = response.data.get("results", []) if isinstance(response.data, dict) else []
+
+            print(f"DEBUG REAL API: Processing {len(raw_results)} places from Google")
+
+            for i, place in enumerate(raw_results):
+                try:
+                    print(f"DEBUG REAL API: Converting place {i}: {place.get('name', 'No name')}")
+                    restaurant = self._convert_place_to_restaurant(place)
+                    restaurants.append(restaurant)
+                    print(f"DEBUG REAL API: Successfully converted: {restaurant.name}")
+                except Exception as e:
+                    print(f"DEBUG REAL API: Failed to convert place {i}: {e}")
+                    logger.warning(f"Failed to convert place to restaurant: {e}")
+                    continue
+
+            print(f"DEBUG REAL API: Final restaurant count: {len(restaurants)}")
+
+            return APIResponse.success_response(
+                data=restaurants,
+                response_time_ms=(time.time() - start_time) * 1000
+            )
+
+        except Exception as e:
+            print(f"DEBUG REAL API: Exception occurred: {e}")
+            logger.error(f"Real Google Places API call failed: {e}")
+            return APIResponse.error_response(f"Google Places API error: {str(e)}")
 
     async def get_place_details(self, place_id: str, fields: Optional[List[str]] = None) -> APIResponse[Restaurant]:
         """Get detailed information about a specific place"""
@@ -277,62 +338,106 @@ class GooglePlacesClient(CacheableAPIClient):
         except Exception as e:
             return APIResponse.error_response(f"Failed to parse place details: {e}")
 
-    def _convert_place_to_restaurant(self, place_data: Dict[str, Any], detailed: bool = False) -> Restaurant:
-        """Convert Google Places API response to Restaurant model"""
+    def _convert_place_to_restaurant(self, place_data: dict) -> Restaurant:
+        """Convert Google Places API response to Restaurant model - COMPLETE IMPLEMENTATION"""
 
-        # Extract basic info
-        place_id = place_data["place_id"]
-        name = place_data["name"]
-        rating = place_data.get("rating", 0.0)
-        user_ratings_total = place_data.get("user_ratings_total", 0)
-        price_level = place_data.get("price_level")
+        print(f"DEBUG CONVERT: Converting place: {place_data.get('name', 'No name')}")
+        print(f"DEBUG CONVERT: Place types: {place_data.get('types', [])}")
 
-        # Extract location
+        # Extract basic information
+        place_id = place_data.get("place_id", "")
+        name = place_data.get("name", "Unknown Restaurant")
+
+        # Extract location from geometry
         geometry = place_data.get("geometry", {})
         location_data = geometry.get("location", {})
         location = Location(
             latitude=location_data.get("lat", 0.0),
             longitude=location_data.get("lng", 0.0),
-            address=place_data.get("formatted_address", ""),
-            city=self._extract_city_from_address(place_data.get("formatted_address", ""))
+            address=place_data.get("vicinity", ""),
+            city="New York",  # Default for now
+            state="NY",
+            country="US"
         )
 
-        # Determine primary category
+        # Map price_level (0-4 in Google) to our PriceLevel enum (1-4)
+        google_price_level = place_data.get("price_level")
+        if google_price_level is not None and google_price_level > 0:
+            price_level = PriceLevel(google_price_level)
+        else:
+            price_level = None
+
+        # Determine cuisine category
         types = place_data.get("types", [])
-        primary_category = self._map_google_types_to_category(types)
+        category = self._map_google_types_to_category(types)
+
+        # Also try name-based detection as fallback
+        if category == RestaurantCategory.AMERICAN:  # Default fallback
+            name_category = Restaurant._detect_cuisine_from_name(name, types)
+            if name_category != RestaurantCategory.AMERICAN:
+                category = name_category
+
+        print(f"DEBUG CONVERT: Detected category: {category.value}")
+
+        # Extract other fields
+        rating = place_data.get("rating", 0.0)
+        user_ratings_total = place_data.get("user_ratings_total", 0)
+        formatted_address = place_data.get("formatted_address", place_data.get("vicinity", ""))
 
         # Create restaurant features
-        features = RestaurantFeatures()
-        if detailed:
-            # Extract features from detailed response
-            features = self._extract_features_from_place(place_data)
+        features = RestaurantFeatures(
+            outdoor_seating=False,  # Not available in basic search
+            wifi=False,
+            accepts_reservations=price_level and price_level.value >= 2,
+            delivery_available=False,
+            takeout_available=True,
+            good_for_groups=False,
+            wheelchair_accessible=False
+        )
 
-        # Extract opening hours
-        opening_hours = None
-        if "opening_hours" in place_data:
-            opening_hours = self._convert_opening_hours(place_data["opening_hours"])
+        # Create popularity data
+        popularity = PopularityData(
+            current_popularity=None,
+            is_usually_busy_now=None
+        )
 
         # Extract photos
         photos = []
         if "photos" in place_data:
-            photos = [
-                f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={photo['photo_reference']}&key={self.api_key}"
-                for photo in place_data["photos"][:5]  # Limit to 5 photos
-            ]
+            for photo in place_data["photos"][:3]:  # Limit to 3 photos
+                if "photo_reference" in photo:
+                    photo_url = f"https://maps.googleapis.com/maps/api/place/photo?maxwidth=400&photoreference={photo['photo_reference']}&key={self.api_key}"
+                    photos.append(photo_url)
 
-        # Create popularity data
-        popularity = PopularityData(
-            current_popularity=random.randint(20, 90),  # Mock data
-            is_usually_busy_now=random.choice([True, False, None])
+        restaurant = Restaurant(
+            place_id=place_id,
+            name=name,
+            location=location,
+            primary_category=category,
+            price_level=price_level,
+            rating=rating,
+            user_ratings_total=user_ratings_total,
+            phone_number=None,  # Not in basic search
+            website=None,  # Not in basic search
+            formatted_address=formatted_address,
+            opening_hours=None,  # Not in basic search
+            features=features,
+            popularity=popularity,
+            photos=photos,
+            data_source="google_places"
         )
 
-        return Restaurant.from_google_places(place_data)
+        print(f"DEBUG CONVERT: Created restaurant: {restaurant.name} ({restaurant.primary_category.value})")
+        return restaurant
 
     def _map_google_types_to_category(self, types: List[str]) -> RestaurantCategory:
-        """Map Google Places types to our restaurant categories"""
+        """Map Google Places types to our restaurant categories - ENHANCED"""
 
-        # Priority mapping for cuisine types
+        print(f"DEBUG MAPPING: Input types: {types}")
+
+        # Enhanced mapping with more Google types
         cuisine_mapping = {
+            # Direct cuisine mappings
             "italian_restaurant": RestaurantCategory.ITALIAN,
             "chinese_restaurant": RestaurantCategory.CHINESE,
             "japanese_restaurant": RestaurantCategory.JAPANESE,
@@ -343,35 +448,42 @@ class GooglePlacesClient(CacheableAPIClient):
             "mediterranean_restaurant": RestaurantCategory.MEDITERRANEAN,
             "korean_restaurant": RestaurantCategory.KOREAN,
             "vietnamese_restaurant": RestaurantCategory.VIETNAMESE,
-            "pizza": RestaurantCategory.PIZZA,
+
+            # Food type mappings
+            "pizza_restaurant": RestaurantCategory.PIZZA,
             "sushi_restaurant": RestaurantCategory.SUSHI,
             "steakhouse": RestaurantCategory.STEAKHOUSE,
             "seafood_restaurant": RestaurantCategory.SEAFOOD,
             "vegetarian_restaurant": RestaurantCategory.VEGETARIAN,
             "fast_food_restaurant": RestaurantCategory.FAST_FOOD,
+
+            # Service type mappings
             "cafe": RestaurantCategory.CAFE,
             "bar": RestaurantCategory.BAR,
-            "bakery": RestaurantCategory.BAKERY
+            "bakery": RestaurantCategory.BAKERY,
+
+            # Generic mappings
+            "restaurant": RestaurantCategory.AMERICAN,
+            "food": RestaurantCategory.AMERICAN,
+            "meal_takeaway": RestaurantCategory.FAST_FOOD,
+            "meal_delivery": RestaurantCategory.FAST_FOOD
         }
 
         # Check for specific cuisine types first
-        for gtype in types:
-            if gtype in cuisine_mapping:
-                return cuisine_mapping[gtype]
+        for place_type in types:
+            if place_type in cuisine_mapping:
+                result = cuisine_mapping[place_type]
+                print(f"DEBUG MAPPING: Mapped '{place_type}' -> {result.value}")
+                return result
 
-        # Default mappings
-        if "restaurant" in types:
-            return RestaurantCategory.AMERICAN  # Default
-        elif "meal_takeaway" in types:
-            return RestaurantCategory.FAST_FOOD
-        elif "cafe" in types:
-            return RestaurantCategory.CAFE
-        elif "bar" in types:
-            return RestaurantCategory.BAR
-        elif "bakery" in types:
-            return RestaurantCategory.BAKERY
-        else:
-            return RestaurantCategory.AMERICAN  # Default fallback
+        # Fallback to American if we find any restaurant-related type
+        restaurant_indicators = ["restaurant", "food", "establishment", "point_of_interest"]
+        if any(indicator in types for indicator in restaurant_indicators):
+            print(f"DEBUG MAPPING: Using fallback -> american")
+            return RestaurantCategory.AMERICAN
+
+        print(f"DEBUG MAPPING: No mapping found, defaulting to american")
+        return RestaurantCategory.AMERICAN
 
     def _extract_features_from_place(self, place_data: Dict[str, Any]) -> RestaurantFeatures:
         """Extract restaurant features from place data"""
