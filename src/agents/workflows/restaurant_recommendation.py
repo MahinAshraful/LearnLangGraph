@@ -395,6 +395,11 @@ async def demo_workflow():
             "query": "Looking for expensive Japanese restaurant for business dinner",
             "user_id": "business_diner_0",
             "location": (40.7505, -73.9934)  # Midtown
+        },
+        {
+            "query": "I need a vegan-friendly Indian place",
+            "user_id": "MAHINTEST",
+            "location": (40.7505, -73.9934)  # Midtown
         }
     ]
 

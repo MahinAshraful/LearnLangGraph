@@ -6,6 +6,7 @@ from ..recommendation_state import RecommendationState
 from ...models.restaurant import Restaurant
 from ...models.query import ParsedQuery
 from ...models.user import UserPreferences
+from ...infrastructure.api_clients.openai.client import OpenAIClient, ChatMessage
 
 logger = logging.getLogger(__name__)
 
@@ -29,7 +30,7 @@ class CandidateFilterNode(BaseNode):
         try:
             # Apply filtering stages
             quality_filtered = self._apply_quality_filter(nearby_restaurants)
-            preference_filtered = self._apply_preference_filter(quality_filtered, parsed_query, user_preferences)
+            preference_filtered = await self._apply_preference_filter(quality_filtered, parsed_query, user_preferences)
             final_candidates = self._apply_final_selection(preference_filtered, parsed_query)
 
             logger.info(f"Filtered restaurants: {len(nearby_restaurants)} → {len(final_candidates)} candidates")
@@ -75,10 +76,10 @@ class CandidateFilterNode(BaseNode):
         logger.debug(f"Quality filter: {len(restaurants)} → {len(filtered)}")
         return filtered
 
-    def _apply_preference_filter(self,
-                                 restaurants: List[Restaurant],
-                                 parsed_query: ParsedQuery,
-                                 user_preferences: Optional[UserPreferences]) -> List[Restaurant]:
+    async def _apply_preference_filter(self,
+                                     restaurants: List[Restaurant],
+                                     parsed_query: ParsedQuery,
+                                     user_preferences: Optional[UserPreferences]) -> List[Restaurant]:
         """Apply user and query preference filters"""
 
         filtered = []
@@ -92,7 +93,7 @@ class CandidateFilterNode(BaseNode):
 
             # Apply dietary restriction filters
             if parsed_query and parsed_query.dietary_requirements:
-                if not self._meets_dietary_requirements(restaurant, parsed_query.dietary_requirements):
+                if not await self._meets_dietary_requirements(restaurant, parsed_query.dietary_requirements):
                     continue
 
             # Apply strict feature requirements (must-haves)
@@ -123,34 +124,163 @@ class CandidateFilterNode(BaseNode):
         logger.debug(f"Final selection: {len(restaurants)} → {len(final_candidates)}")
         return final_candidates
 
-    def _meets_dietary_requirements(self, restaurant: Restaurant, dietary_requirements: List[str]) -> bool:
-        """Check if restaurant meets dietary requirements"""
+    async def _meets_dietary_requirements(self, restaurant: Restaurant, dietary_requirements: List[str]) -> bool:
+        """LLM-based intelligent dietary compatibility assessment"""
 
-        # This would be more sophisticated in production
-        # For now, simple heuristics based on cuisine and features
+        if not dietary_requirements:
+            return True
+
+        # Use LLM to intelligently assess dietary compatibility
+        return await self._llm_dietary_assessment(restaurant, dietary_requirements)
+
+    async def _llm_dietary_assessment(self, restaurant: Restaurant, dietary_requirements: List[str]) -> bool:
+        """Use LLM to assess if restaurant can accommodate dietary needs"""
+
+        # Create cache key for performance
+        cache_key = f"dietary_{restaurant.place_id}_{'+'.join(sorted(dietary_requirements))}"
+
+        # Check cache first (dietary info doesn't change often)
+        if hasattr(self, '_dietary_cache') and cache_key in self._dietary_cache:
+            return self._dietary_cache[cache_key]
+
+        if not hasattr(self, '_dietary_cache'):
+            self._dietary_cache = {}
+
+        # Prepare LLM prompt with restaurant info
+        restaurant_info = f"""
+Restaurant: {restaurant.name}
+Cuisine: {restaurant.primary_category.value}
+Rating: {restaurant.rating}/5.0
+Price Level: {restaurant.price_level.value if restaurant.price_level else 'Unknown'}
+Google Types: {getattr(restaurant, 'google_types', [])}
+"""
+
+        dietary_list = ", ".join(dietary_requirements)
+
+        prompt = f"""You are an expert on restaurant dietary accommodations. Assess if this restaurant can likely accommodate these dietary needs.
+
+{restaurant_info}
+
+Dietary Requirements: {dietary_list}
+
+Consider:
+1. Restaurant name clues (e.g., "Green Leaf Cafe" likely vegetarian-friendly)
+2. Cuisine type compatibility (e.g., Indian restaurants typically have many vegetarian options)
+3. Modern restaurant trends (most restaurants now accommodate common dietary needs)
+4. Chain vs independent considerations
+5. Price level (higher-end restaurants typically more accommodating)
+
+Think step-by-step:
+- What does the restaurant name suggest about their menu focus?
+- How compatible is this cuisine type with the dietary requirements?
+- Are there any obvious red flags (e.g., "Joe's BBQ Smokehouse" for vegan needs)?
+- What's the likelihood they can accommodate these needs?
+
+Return ONLY: "YES" if likely to accommodate, "NO" if unlikely, "MAYBE" if uncertain.
+
+Be practical - most restaurants today can accommodate vegetarian/gluten-free, but be more careful with vegan, kosher, halal."""
+
+        try:
+            # Get OpenAI client from the scoring node or create one
+            if hasattr(self, 'openai_client'):
+                openai_client = self.openai_client
+            else:
+                # Import here to avoid circular imports
+                from ...infrastructure.api_clients.openai.client import OpenAIClient, ChatMessage
+                from ...infrastructure.databases.cache.memory_adapter import MemoryAdapter
+
+                cache = MemoryAdapter()
+                await cache.connect()
+                openai_client = OpenAIClient(cache_adapter=cache)
+
+            response = await openai_client.chat_completion([
+                ChatMessage(role="system", content="You are an expert on restaurant dietary accommodations."),
+                ChatMessage(role="user", content=prompt)
+            ], max_tokens=50, temperature=0.1)
+
+            if response.success:
+                result = response.data.content.strip().upper()
+
+                # Convert LLM response to boolean
+                if result == "YES":
+                    compatibility = True
+                elif result == "NO":
+                    compatibility = False
+                else:  # "MAYBE" or unclear response
+                    compatibility = True  # Default to inclusive for uncertain cases
+
+                print(f"DEBUG DIETARY: {restaurant.name} + {dietary_requirements} = {result} -> {compatibility}")
+
+                # Cache the result
+                self._dietary_cache[cache_key] = compatibility
+                return compatibility
+
+        except Exception as e:
+            print(f"DEBUG DIETARY: LLM assessment failed for {restaurant.name}: {e}")
+
+        # Fallback to improved heuristics if LLM fails
+        return self._improved_dietary_heuristics(restaurant, dietary_requirements)
+
+    def _improved_dietary_heuristics(self, restaurant: Restaurant, dietary_requirements: List[str]) -> bool:
+        """Improved fallback heuristics for dietary assessment"""
+
+        cuisine = restaurant.primary_category.value.lower()
+        name = restaurant.name.lower()
 
         for requirement in dietary_requirements:
-            if requirement == "vegetarian":
-                if restaurant.primary_category.value == "vegetarian":
+            req_lower = requirement.lower()
+
+            if req_lower == "vegetarian":
+                # Vegetarian-friendly clues in name
+                if any(word in name for word in ["green", "leaf", "garden", "veggie", "plant", "salad"]):
                     continue
-                # Most cuisines have vegetarian options
-                if restaurant.primary_category.value in ["indian", "thai", "mediterranean", "italian"]:
+
+                # Cuisine compatibility (expanded list)
+                if cuisine in ["indian", "thai", "mediterranean", "italian", "vietnamese", "ethiopian", "middle_eastern"]:
                     continue
+
+                # Modern restaurants typically accommodate
+                if restaurant.rating >= 4.0:  # Higher-rated places usually more accommodating
+                    continue
+
+                # Red flags for vegetarian
+                if any(word in name for word in ["bbq", "grill", "steakhouse", "burger", "wings", "smokehouse"]):
+                    return False
+
+            elif req_lower == "vegan":
+                # Vegan-specific clues
+                if any(word in name for word in ["vegan", "plant", "raw", "juice", "green"]):
+                    continue
+
+                # Cuisines more likely to have vegan options
+                if cuisine in ["indian", "thai", "mediterranean", "middle_eastern", "ethiopian"]:
+                    continue
+
+                # Be more restrictive for vegan
+                if cuisine in ["steakhouse", "bbq", "french", "italian"] or any(word in name for word in ["cheese", "dairy", "cream"]):
+                    return False
+
+            elif req_lower == "gluten_free":
+                # Gluten-free friendly clues
+                if "gluten" in name:
+                    continue
+
+                # Cuisines naturally lower in gluten
+                if cuisine in ["mexican", "thai", "indian", "seafood"]:
+                    continue
+
+                # Red flags for gluten-free
+                if cuisine in ["pizza", "bakery", "cafe"] and "gluten" not in name:
+                    return False
+
+            elif req_lower in ["halal", "kosher"]:
+                # Religious dietary requirements - be more careful
+                if req_lower in name or cuisine in ["middle_eastern", "mediterranean"]:
+                    continue
+                # Don't assume other restaurants can accommodate
                 return False
 
-            elif requirement == "vegan":
-                if restaurant.primary_category.value in ["vegetarian", "vegan"]:
-                    continue
-                # Limited vegan options in some cuisines
-                if restaurant.primary_category.value not in ["indian", "thai", "mediterranean"]:
-                    return False
-
-            elif requirement == "gluten_free":
-                # Assume most restaurants can accommodate, except very limited ones
-                if restaurant.primary_category.value in ["pizza", "bakery"]:
-                    return False
-
-        return True
+        return True  # Default to allowing if no red flags
 
     def _has_deal_breakers(self, restaurant: Restaurant, deal_breakers: List[str]) -> bool:
         """Check if restaurant has any deal breaker features"""
