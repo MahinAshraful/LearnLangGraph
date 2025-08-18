@@ -20,11 +20,8 @@ class APIConfig:
     openai_api_key: str = field(default_factory=lambda: os.getenv("OPENAI_API_KEY", ""))
     openai_org_id: Optional[str] = field(default_factory=lambda: os.getenv("OPENAI_ORG_ID"))
 
-    # Google Places API
+    # Google Places API (Primary Places Provider)
     google_places_api_key: str = field(default_factory=lambda: os.getenv("GOOGLE_PLACES_API_KEY", ""))
-
-    #FourSquare API
-    foursquare_api_key: str = field(default_factory=lambda: os.getenv("FOURSQUARE_API_KEY", ""))
 
     # Weather API (OpenWeatherMap)
     weather_api_key: str = field(default_factory=lambda: os.getenv("WEATHER_API_KEY", ""))
@@ -32,19 +29,13 @@ class APIConfig:
     # Eventbrite API
     eventbrite_api_key: str = field(default_factory=lambda: os.getenv("EVENTBRITE_API_KEY", ""))
 
-    # Rate limiting
+    # Rate limiting (removed Foursquare)
     api_rate_limits: Dict[str, int] = field(default_factory=lambda: {
         "google_places": 100,  # requests per minute
         "openai": 60,
         "weather": 60,
-        "eventbrite": 50,
-        "foursquare": 950
+        "eventbrite": 50
     })
-
-    def debug_keys(self):
-        print(f"DEBUG KEYS:")
-        print(f"  FOURSQUARE_API_KEY from env: {repr(os.getenv('FOURSQUARE_API_KEY'))}")
-        print(f"  foursquare_api_key field: {repr(self.foursquare_api_key)}")
 
 
 @dataclass
@@ -103,7 +94,7 @@ class LLMConfig:
 class RecommendationConfig:
     """Recommendation algorithm configuration"""
 
-    # Scoring weights (as per your document)
+    # Scoring weights (50/30/15/5 algorithm)
     scoring_weights: Dict[str, float] = field(default_factory=lambda: {
         "preference_match": 0.50,  # 50% user preference matching
         "context_relevance": 0.30,  # 30% context (weather, time, etc.)
@@ -158,50 +149,49 @@ class CacheConfig:
 
 @dataclass
 class MonitoringConfig:
-    """Monitoring and observability configuration"""
+    """Monitoring and logging configuration"""
 
     # Logging
     log_level: str = field(default="INFO")
-    enable_structured_logging: bool = field(default=True)
-    log_requests: bool = field(default=True)
+    log_format: str = field(default="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    log_to_file: bool = field(default=True)
+    log_file_path: str = field(default="logs/restaurant_rec.log")
 
     # Metrics
     enable_metrics: bool = field(default=True)
-    metrics_endpoint: str = field(default="/metrics")
+    metrics_port: int = field(default=9090)
 
-    # Tracing
-    enable_tracing: bool = field(default=False)
-    tracing_sample_rate: float = field(default=0.1)
+    # Health checks
+    health_check_timeout: int = field(default=30)
 
-    # Performance monitoring
-    slow_query_threshold_ms: float = field(default=1000)
-    max_processing_time_ms: float = field(default=5000)
+    # Performance tracking
+    track_api_calls: bool = field(default=True)
+    track_cache_performance: bool = field(default=True)
+    track_recommendation_quality: bool = field(default=True)
 
 
 @dataclass
 class FeatureFlags:
-    """Feature flags for A/B testing and gradual rollouts"""
+    """Feature flags for gradual rollouts"""
 
     # Core features
     enable_personalization: bool = field(default=True)
     enable_collaborative_filtering: bool = field(default=True)
     enable_smart_reasoning: bool = field(default=True)
+
+    # Context features
     enable_weather_context: bool = field(default=False)  # Not implemented yet
     enable_event_context: bool = field(default=False)  # Not implemented yet
 
-    # Experimental features
-    enable_social_recommendations: bool = field(default=False)
+    # Advanced features
+    enable_social_features: bool = field(default=False)  # Future feature
     enable_real_time_popularity: bool = field(default=True)
     enable_dietary_filtering: bool = field(default=True)
 
-    # Performance optimizations
-    enable_parallel_api_calls: bool = field(default=True)
-    enable_result_caching: bool = field(default=True)
-    enable_embedding_cache: bool = field(default=True)
-
-    # A/B testing
-    recommendation_algorithm_variant: str = field(default="hybrid")  # "content", "collaborative", "hybrid"
-    scoring_algorithm_version: str = field(default="v1")
+    # System features
+    enable_a_b_testing: bool = field(default=True)
+    enable_analytics: bool = field(default=True)
+    enable_caching: bool = field(default=True)
 
 
 @dataclass
@@ -251,55 +241,26 @@ class Settings:
             settings.cache.ttl["query_results"] = 3600  # Longer cache in prod
 
         elif environment == Environment.TESTING:
-            settings.testing = True
-            settings.database.redis_url = "redis://localhost:6379/1"  # Test DB
-            settings.cache.ttl = {k: 60 for k in settings.cache.ttl.keys()}  # Short cache for tests
+            settings.cache.ttl = {k: 60 for k in settings.cache.ttl.keys()}  # Short cache in tests
+            settings.recommendation.cache_recommendations = False
 
         return settings
 
-    def validate(self) -> List[str]:
-        """Validate configuration and return list of errors"""
-        errors = []
-
-        # Check required API keys in production
-        if self.environment == Environment.PRODUCTION:
-            if not self.api.openai_api_key:
-                errors.append("OPENAI_API_KEY is required in production")
-            if not self.api.google_places_api_key:
-                errors.append("GOOGLE_PLACES_API_KEY is required in production")
-
-        # Validate scoring weights sum to 1.0
-        total_weight = sum(self.recommendation.scoring_weights.values())
-        if abs(total_weight - 1.0) > 0.01:
-            errors.append(f"Scoring weights must sum to 1.0, got {total_weight}")
-
-        # Validate cache TTLs are positive
-        for cache_type, ttl in self.cache.ttl.items():
-            if ttl <= 0:
-                errors.append(f"Cache TTL for {cache_type} must be positive")
-
-        return errors
-
 
 # Global settings instance
-_settings: Optional[Settings] = None
+_settings = None
 
 
 def get_settings() -> Settings:
-    """Get application settings (singleton)"""
+    """Get global settings instance"""
     global _settings
     if _settings is None:
         _settings = Settings.from_env()
-
-        # Validate settings
-        errors = _settings.validate()
-        if errors:
-            raise ValueError(f"Configuration errors: {', '.join(errors)}")
-
     return _settings
 
 
-def override_settings(new_settings: Settings):
-    """Override settings (useful for testing)"""
+def reload_settings():
+    """Force reload settings from environment"""
     global _settings
-    _settings = new_settings
+    _settings = Settings.from_env()
+    return _settings

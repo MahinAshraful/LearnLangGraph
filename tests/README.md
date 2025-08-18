@@ -1,6 +1,6 @@
 # Restaurant Recommendation System - Test Suite
 
-This comprehensive test suite ensures all components of the restaurant recommendation system work correctly.
+This comprehensive test suite ensures all components of the restaurant recommendation system work correctly with Google Places as the primary places API.
 
 ## 🏗️ Test Structure
 
@@ -9,9 +9,8 @@ tests/
 ├── conftest.py                    # Pytest configuration & fixtures
 ├── test_runner.py                 # Custom test runner with reporting
 ├── api_clients/
-│   ├── test_foursquare.py         # Foursquare API integration tests
-│   ├── test_google_places_mock.py # Mock Google Places tests
-│   └── test_openai_mock.py        # OpenAI client tests
+│   ├── test_google_places.py      # Google Places API integration tests
+│   └── test_openai.py             # OpenAI client tests
 ├── databases/
 │   ├── test_vector_db_mock.py     # Vector database tests
 │   ├── test_cache_adapters.py     # Cache system tests
@@ -23,7 +22,7 @@ tests/
 ├── models/
 │   └── test_data_models.py        # Pydantic model tests
 └── integration/
-    ├── test_mock_to_real_api.py   # Mock vs real API comparison
+    ├── test_api_comparison.py     # Mock vs real API comparison
     └── test_performance.py        # Performance benchmarks
 ```
 
@@ -39,9 +38,8 @@ pip install -r requirements-test.txt
 
 ```bash
 # Optional - for real API testing
-export FOURSQUARE_API_KEY="fsq3VEYQDIAB3Y4VHRDCW1IAPT4DZ4ZDQATWT0GQVKKGJWNNDZPJ"
+export GOOGLE_PLACES_API_KEY="your_google_places_key"
 export OPENAI_API_KEY="your_openai_key"
-export GOOGLE_PLACES_API_KEY="your_google_key"
 ```
 
 ### 3. Run Tests
@@ -54,7 +52,7 @@ python tests/test_runner.py
 pytest tests/
 
 # Run specific test categories
-python tests/api_clients/test_foursquare.py
+python tests/api_clients/test_google_places.py
 python tests/agents/test_workflow.py
 python tests/databases/test_mock_data_quality.py
 ```
@@ -62,8 +60,7 @@ python tests/databases/test_mock_data_quality.py
 ## 🧪 Test Categories
 
 ### **API Client Tests** (`api_clients/`)
-- **Foursquare API**: Real API integration, error handling, data quality
-- **Google Places Mock**: Mock data generation and consistency
+- **Google Places API**: Real API integration, error handling, data quality
 - **OpenAI Client**: LLM completion and embedding tests
 
 **What they test:**
@@ -71,6 +68,7 @@ python tests/databases/test_mock_data_quality.py
 - Response parsing and error handling
 - Rate limiting and performance
 - Data format consistency
+- Mock vs real API behavior
 
 ### **Database Tests** (`databases/`)
 - **Vector Database**: Similarity search, user personas, collaborative filtering
@@ -95,7 +93,7 @@ python tests/databases/test_mock_data_quality.py
 - Performance under load
 
 ### **Integration Tests** (`integration/`)
-- **Mock vs Real**: Compare mock and real API results
+- **API Comparison**: Compare mock and real API results
 - **Performance**: Load testing and benchmarks
 - **User Scenarios**: Complete user journeys
 
@@ -103,8 +101,8 @@ python tests/databases/test_mock_data_quality.py
 
 ### Run Individual Test Files
 ```bash
-# Test Foursquare API (requires API key)
-python tests/api_clients/test_foursquare.py
+# Test Google Places API (requires API key)
+python tests/api_clients/test_google_places.py
 
 # Test complete workflow (works with mocks)
 python tests/agents/test_workflow.py
@@ -181,8 +179,7 @@ async def test_custom_scenario(self):
 
 📋 Testing API Clients
 ----------------------------------------
-✅ Foursquare API tests passed
-✅ Mock Google Places tests passed  
+✅ Google Places API tests passed (Real API)
 ⚠️  OpenAI API key not found - skipping LLM tests
 
 📋 Testing Database Systems
@@ -211,7 +208,7 @@ pytest tests/ --html=reports/test_report.html
 
 1. **API Key Missing**
    ```
-   FOURSQUARE_API_KEY not available - tests skipped
+   GOOGLE_PLACES_API_KEY not available - using mock data
    ```
    **Fix**: Set environment variable or run in mock mode
 
@@ -233,7 +230,7 @@ pytest tests/ --html=reports/test_report.html
 PYTHONPATH=src python tests/test_runner.py --debug
 
 # Run single test with full output
-pytest tests/api_clients/test_foursquare.py::TestFoursquareClient::test_basic_search -v -s
+pytest tests/api_clients/test_google_places.py::TestGooglePlacesClient::test_basic_search -v -s
 ```
 
 ## 🔄 Continuous Integration
@@ -254,7 +251,8 @@ jobs:
     - run: pip install -r requirements-test.txt
     - run: python tests/test_runner.py
     env:
-      FOURSQUARE_API_KEY: ${{ secrets.FOURSQUARE_API_KEY }}
+      GOOGLE_PLACES_API_KEY: ${{ secrets.GOOGLE_PLACES_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 ```
 
 ## 📈 Performance Benchmarks
@@ -285,6 +283,7 @@ def test_[component]_[feature]_[scenario]():
 - [Pytest Documentation](https://docs.pytest.org/)
 - [Async Testing Guide](https://pytest-asyncio.readthedocs.io/)
 - [Mock Data Best Practices](https://realpython.com/python-mock-library/)
+- [Google Places API Documentation](https://developers.google.com/maps/documentation/places/web-service)
 
 ---
 

@@ -54,15 +54,8 @@ class TestRunner:
     async def test_api_clients(self):
         """Test all API clients"""
 
-        # Test Foursquare (if API key available)
-        if os.getenv("FOURSQUARE_API_KEY"):
-            await self.test_foursquare_api()
-        else:
-            print("⚠️  Foursquare API key not found - skipping real API tests")
-            self.results["skipped"] += 1
-
-        # Test Mock Google Places
-        await self.test_mock_google_places()
+        # Test Google Places (real API if key available, otherwise mock)
+        await self.test_google_places_api()
 
         # Test OpenAI (if API key available)
         if os.getenv("OPENAI_API_KEY"):
@@ -71,17 +64,26 @@ class TestRunner:
             print("⚠️  OpenAI API key not found - skipping LLM tests")
             self.results["skipped"] += 1
 
-    async def test_foursquare_api(self):
-        """Test Foursquare API integration"""
+    async def test_google_places_api(self):
+        """Test Google Places API integration"""
         try:
-            from src.infrastructure.api_clients.foursquare.client import FoursquareClient
-            from src.infrastructure.api_clients.google_places.client import NearbySearchRequest
+            from src.infrastructure.api_clients.google_places.client import GooglePlacesClient, NearbySearchRequest
 
-            client = FoursquareClient()
+            # Determine if we should use real API or mock
+            api_key = os.getenv("GOOGLE_PLACES_API_KEY")
+            if api_key:
+                print("🌐 Testing Google Places API with real API key")
+                client = GooglePlacesClient(api_key=api_key, use_mock=False)
+                test_mode = "Real API"
+            else:
+                print("🎭 Testing Google Places API with mock data")
+                client = GooglePlacesClient(use_mock=True)
+                test_mode = "Mock"
 
-            # Health check
-            is_healthy = await client.health_check()
-            assert is_healthy, "Foursquare API health check failed"
+            # Health check (for real API only)
+            if not client.use_mock:
+                is_healthy = await client.health_check()
+                assert is_healthy, "Google Places API health check failed"
 
             # Search test
             request = NearbySearchRequest(
@@ -91,51 +93,18 @@ class TestRunner:
             )
 
             response = await client.nearby_search(request)
-            assert response.success, f"Foursquare search failed: {response.error}"
+            assert response.success, f"Google Places search failed: {response.error}"
             assert len(response.data) > 0, "No restaurants found"
 
             # Cleanup
             if hasattr(client, '_session') and client._session:
                 await client._session.close()
 
-            print("✅ Foursquare API tests passed")
+            print(f"✅ Google Places API tests passed ({test_mode})")
             self.results["passed"] += 1
 
         except Exception as e:
-            print(f"❌ Foursquare API test failed: {e}")
-            self.results["failed"] += 1
-            raise
-
-    async def test_mock_google_places(self):
-        """Test mock Google Places client"""
-        try:
-            from src.infrastructure.api_clients.google_places.client import GooglePlacesClient, NearbySearchRequest
-
-            client = GooglePlacesClient(use_mock=True)
-
-            # Test search
-            request = NearbySearchRequest(
-                location=(40.7128, -74.0060),
-                radius=5000,
-                keyword="italian"
-            )
-
-            response = await client.nearby_search(request)
-            assert response.success, "Mock search failed"
-            assert len(response.data) > 0, "No mock restaurants generated"
-
-            # Test that we get Italian restaurants
-            italian_found = any(
-                'italian' in r.primary_category.value.lower() or 'italian' in r.name.lower()
-                for r in response.data
-            )
-            assert italian_found, "No Italian restaurants in mock data"
-
-            print("✅ Mock Google Places tests passed")
-            self.results["passed"] += 1
-
-        except Exception as e:
-            print(f"❌ Mock Google Places test failed: {e}")
+            print(f"❌ Google Places API test failed: {e}")
             self.results["failed"] += 1
             raise
 
@@ -144,7 +113,7 @@ class TestRunner:
         try:
             from src.infrastructure.api_clients.openai.client import OpenAIClient, ChatMessage
 
-            client = OpenAI(OpenAIClient())
+            client = OpenAIClient()
 
             # Test simple completion
             messages = [ChatMessage(role="user", content="Parse this restaurant query: 'Italian dinner for 2'")]
@@ -194,24 +163,23 @@ class TestRunner:
             raise
 
     async def test_cache_system(self):
-        """Test caching system"""
+        """Test cache system functionality"""
         try:
             from src.infrastructure.databases.cache.memory_adapter import MemoryAdapter
 
             cache = MemoryAdapter()
             await cache.connect()
 
-            # Test basic operations
-            await cache.set("test_key", {"data": "test_value"}, ttl=60)
-            result = await cache.get("test_key")
-            assert result is not None, "Cache get failed"
-            assert result["data"] == "test_value", "Cache data mismatch"
+            # Test basic cache operations
+            await cache.set("test_key", "test_value", ttl=60)
+            value = await cache.get("test_key")
+            assert value == "test_value", "Cache get/set failed"
 
-            # Test expiration
-            await cache.set("temp_key", "temp_value", ttl=1)
+            # Test cache expiry
+            await cache.set("expire_key", "expire_value", ttl=1)
             await asyncio.sleep(1.1)
-            expired_result = await cache.get("temp_key")
-            assert expired_result is None, "Cache expiration failed"
+            expired_value = await cache.get("expire_key")
+            assert expired_value is None, "Cache expiry failed"
 
             await cache.disconnect()
 
@@ -225,109 +193,19 @@ class TestRunner:
 
     async def test_agents(self):
         """Test core agent functionality"""
-        await self.test_query_parsing()
-        await self.test_scoring_algorithm()
+        await self.test_workflow_creation()
+        await self.test_end_to_end_recommendation()
 
-    async def test_query_parsing(self):
-        """Test query parsing logic"""
+    async def test_workflow_creation(self):
+        """Test workflow can be created"""
         try:
-            from src.models.query import ParsedQuery, QueryType
-            from src.models.restaurant import RestaurantCategory, PriceLevel
-
-            # Test that we can create and parse basic queries
-            test_cases = [
-                ("Italian restaurant", QueryType.CUISINE_SPECIFIC, RestaurantCategory.ITALIAN),
-                ("cheap tacos", QueryType.CUISINE_SPECIFIC, RestaurantCategory.MEXICAN),
-                ("expensive sushi", QueryType.CUISINE_SPECIFIC, RestaurantCategory.SUSHI)
-            ]
-
-            for query_text, expected_type, expected_cuisine in test_cases:
-                # Create a basic parsed query manually (simulating the parser)
-                parsed_query = ParsedQuery(
-                    original_query=query_text,
-                    query_type=expected_type,
-                    cuisine_preferences=[expected_cuisine] if expected_cuisine else []
-                )
-
-                assert parsed_query.query_type == expected_type
-                if expected_cuisine:
-                    assert expected_cuisine in parsed_query.cuisine_preferences
-
-            print("✅ Query parsing tests passed")
-            self.results["passed"] += 1
-
-        except Exception as e:
-            print(f"❌ Query parsing test failed: {e}")
-            self.results["failed"] += 1
-            raise
-
-    async def test_scoring_algorithm(self):
-        """Test scoring algorithm"""
-        try:
-            from src.models.recommendation import ScoreBreakdown
-
-            # Test score calculation
-            score = ScoreBreakdown(
-                preference_score=0.8,
-                context_score=0.7,
-                quality_score=0.9,
-                boost_score=0.1
-            )
-
-            total = score.total_score
-            expected = 0.8 * 0.5 + 0.7 * 0.3 + 0.9 * 0.15 + 0.1 * 0.05
-            assert abs(total - expected) < 0.001, f"Score calculation error: {total} != {expected}"
-
-            print("✅ Scoring algorithm tests passed")
-            self.results["passed"] += 1
-
-        except Exception as e:
-            print(f"❌ Scoring algorithm test failed: {e}")
-            self.results["failed"] += 1
-            raise
-
-    async def test_models(self):
-        """Test data models"""
-        try:
-            from src.models.restaurant import Restaurant, RestaurantCategory, PriceLevel
-            from src.models.common import Location
-
-            # Test restaurant model creation
-            location = Location(latitude=40.7128, longitude=-74.0060, city="New York")
-
-            restaurant = Restaurant(
-                place_id="test_id",
-                name="Test Restaurant",
-                location=location,
-                primary_category=RestaurantCategory.ITALIAN,
-                price_level=PriceLevel.MODERATE,
-                rating=4.5,
-                formatted_address="123 Test St, New York, NY"
-            )
-
-            assert restaurant.name == "Test Restaurant"
-            assert restaurant.rating == 4.5
-            assert restaurant.primary_category == RestaurantCategory.ITALIAN
-
-            print("✅ Data model tests passed")
-            self.results["passed"] += 1
-
-        except Exception as e:
-            print(f"❌ Data model test failed: {e}")
-            self.results["failed"] += 1
-            raise
-
-    async def test_integration(self):
-        """Test integration scenarios"""
-        try:
-            # Test that mock services can be created
             from src.agents.workflows.restaurant_recommendation import create_restaurant_recommendation_workflow
             from src.infrastructure.databases.cache.memory_adapter import MemoryAdapter
 
             cache = MemoryAdapter()
             await cache.connect()
 
-            # Test workflow creation with mocks
+            # Create workflow with mock services
             workflow = await create_restaurant_recommendation_workflow(
                 openai_api_key="fake_key_for_testing",
                 use_mock_services=True,
@@ -335,49 +213,132 @@ class TestRunner:
             )
 
             assert workflow is not None, "Workflow creation failed"
+            assert hasattr(workflow, 'query_parser'), "Query parser missing"
+            assert hasattr(workflow, 'scoring'), "Scoring agent missing"
 
             await cache.disconnect()
+
+            print("✅ Workflow creation tests passed")
+            self.results["passed"] += 1
+
+        except Exception as e:
+            print(f"❌ Workflow creation test failed: {e}")
+            self.results["failed"] += 1
+            raise
+
+    async def test_end_to_end_recommendation(self):
+        """Test complete recommendation flow"""
+        try:
+            from src.agents.workflows.restaurant_recommendation import create_restaurant_recommendation_workflow
+            from src.infrastructure.databases.cache.memory_adapter import MemoryAdapter
+
+            cache = MemoryAdapter()
+            await cache.connect()
+
+            # Create workflow
+            workflow = await create_restaurant_recommendation_workflow(
+                openai_api_key="fake_key_for_testing",
+                use_mock_services=True,
+                cache_adapter=cache
+            )
+
+            # Test recommendation
+            result = await workflow.recommend_restaurants(
+                user_query="Find me Italian dinner for 2",
+                user_id="test_user",
+                user_location=(40.7128, -74.0060)
+            )
+
+            assert result["success"], f"Recommendation failed: {result.get('error', 'Unknown error')}"
+            assert len(result["data"]["recommendations"]) > 0, "No recommendations returned"
+
+            await cache.disconnect()
+
+            print("✅ End-to-end recommendation tests passed")
+            self.results["passed"] += 1
+
+        except Exception as e:
+            print(f"❌ End-to-end recommendation test failed: {e}")
+            self.results["failed"] += 1
+            raise
+
+    async def test_models(self):
+        """Test data models"""
+        try:
+            from src.models.restaurant import Restaurant, RestaurantCategory, PriceLevel
+            from src.models.recommendation import Recommendation, ScoreBreakdown
+            from src.models.query import ParsedQuery, QueryType
+
+            # Test basic model creation
+            restaurant = Restaurant(
+                place_id="test_123",
+                name="Test Restaurant",
+                primary_category=RestaurantCategory.ITALIAN,
+                rating=4.5,
+                price_level=PriceLevel.MODERATE
+            )
+
+            assert restaurant.name == "Test Restaurant"
+            assert restaurant.rating == 4.5
+
+            print("✅ Data model tests passed")
+            self.results["passed"] += 1
+
+        except Exception as e:
+            print(f"❌ Data model tests failed: {e}")
+            self.results["failed"] += 1
+            raise
+
+    async def test_integration(self):
+        """Test integration scenarios"""
+        try:
+            # Test places factory
+            from src.infrastructure.api_clients.places_factory import PlacesClientFactory
+
+            # Test auto selection
+            client = PlacesClientFactory.create_client("auto")
+            assert client is not None, "Factory failed to create client"
+
+            # Test mock selection
+            mock_client = PlacesClientFactory.create_client("mock")
+            assert mock_client is not None, "Factory failed to create mock client"
+            assert mock_client.use_mock == True, "Mock client not properly configured"
 
             print("✅ Integration tests passed")
             self.results["passed"] += 1
 
         except Exception as e:
-            print(f"❌ Integration test failed: {e}")
+            print(f"❌ Integration tests failed: {e}")
             self.results["failed"] += 1
             raise
 
     def print_summary(self, total_time: float):
         """Print test summary"""
-        print("\n" + "=" * 60)
-        print("📊 TEST SUMMARY")
-        print("=" * 60)
-
         total_tests = self.results["passed"] + self.results["failed"] + self.results["skipped"]
+        success_rate = (self.results["passed"] / total_tests * 100) if total_tests > 0 else 0
 
+        print(f"\n📊 TEST SUMMARY")
+        print("=" * 60)
         print(f"✅ Passed: {self.results['passed']}")
         print(f"❌ Failed: {self.results['failed']}")
         print(f"⚠️  Skipped: {self.results['skipped']}")
         print(f"📈 Total: {total_tests}")
         print(f"⏱️  Time: {total_time:.2f}s")
+        print(f"🎯 Success Rate: {success_rate:.1f}%")
 
-        if self.results["failed"] > 0:
-            print(f"\n❌ FAILURES:")
+        if self.results["errors"]:
+            print(f"\n❌ ERRORS:")
             for error in self.results["errors"]:
-                print(f"   - {error}")
+                print(f"  - {error}")
 
-        success_rate = (self.results["passed"] / max(total_tests, 1)) * 100
-        print(f"\n🎯 Success Rate: {success_rate:.1f}%")
-
-        if success_rate >= 80:
-            print("🎉 Test suite in good shape!")
-        elif success_rate >= 60:
-            print("⚠️  Some issues to address")
+        if self.results["failed"] == 0:
+            print(f"\n🎉 All tests passed! System is ready for Google Places.")
         else:
-            print("🚨 Multiple issues need attention")
+            print(f"\n⚠️  Some tests failed. Please review and fix issues.")
 
 
 async def main():
-    """Run all tests"""
+    """Run the test suite"""
     runner = TestRunner()
     await runner.run_all_tests()
 

@@ -9,7 +9,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from src.infrastructure.databases.cache.memory_adapter import MemoryAdapter
 from src.infrastructure.databases.vector_db.mock_adapter import MockVectorAdapter
-from src.infrastructure.api_clients.foursquare.client import FoursquareClient
 from src.infrastructure.api_clients.google_places.client import GooglePlacesClient
 from src.infrastructure.api_clients.openai.client import OpenAIClient
 
@@ -41,12 +40,24 @@ async def vector_db() -> AsyncGenerator[MockVectorAdapter, None]:
 
 
 @pytest.fixture
-async def foursquare_client(cache_adapter) -> AsyncGenerator[FoursquareClient, None]:
-    """Provide Foursquare client (only if API key available)"""
-    if not os.getenv("FOURSQUARE_API_KEY"):
-        pytest.skip("FOURSQUARE_API_KEY not available")
+async def google_places_client(cache_adapter) -> AsyncGenerator[GooglePlacesClient, None]:
+    """Provide Google Places client (real API if key available, otherwise mock)"""
+    api_key = os.getenv("GOOGLE_PLACES_API_KEY")
 
-    client = FoursquareClient(cache_adapter=cache_adapter)
+    if api_key:
+        # Use real API
+        client = GooglePlacesClient(
+            api_key=api_key,
+            cache_adapter=cache_adapter,
+            use_mock=False
+        )
+    else:
+        # Use mock
+        client = GooglePlacesClient(
+            cache_adapter=cache_adapter,
+            use_mock=True
+        )
+
     yield client
 
     # Cleanup
@@ -56,7 +67,7 @@ async def foursquare_client(cache_adapter) -> AsyncGenerator[FoursquareClient, N
 
 @pytest.fixture
 async def mock_places_client(cache_adapter) -> AsyncGenerator[GooglePlacesClient, None]:
-    """Provide mock Google Places client"""
+    """Provide mock Google Places client (always uses mock data)"""
     client = GooglePlacesClient(cache_adapter=cache_adapter, use_mock=True)
     yield client
 
@@ -96,3 +107,15 @@ def sample_queries():
 def sample_location():
     """Sample NYC location for testing"""
     return (40.7128, -74.0060)  # NYC coordinates
+
+
+@pytest.fixture
+def sample_user_preferences():
+    """Sample user preferences for testing"""
+    return {
+        "user_id": "test_user_123",
+        "favorite_cuisines": ["italian", "mexican", "japanese"],
+        "preferred_price_levels": ["moderate", "expensive"],
+        "dietary_restrictions": ["vegetarian"],
+        "preferred_ambiance": ["casual", "romantic"]
+    }
