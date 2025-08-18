@@ -150,47 +150,6 @@ SYSTEM_ROLES = {
     "OUTPUT_FORMATTER": "You are a helpful restaurant recommendation assistant. Format recommendations in a clear, engaging way."
 }
 
-# Query parsing keywords
-CUISINE_KEYWORDS = {
-    "italian": ["italian", "pizza", "pasta", "spaghetti", "marinara", "gelato"],
-    "chinese": ["chinese", "kung pao", "lo mein", "dim sum", "szechuan"],
-    "japanese": ["japanese", "sushi", "ramen", "tempura", "yakitori", "sashimi"],
-    "mexican": ["mexican", "tacos", "burritos", "quesadilla", "salsa", "guacamole"],
-    "thai": ["thai", "pad thai", "curry", "tom yum", "pad see ew"],
-    "indian": ["indian", "curry", "naan", "biryani", "tandoori", "masala"],
-    "french": ["french", "bistro", "croissant", "escargot", "coq au vin"],
-    "american": ["american", "burger", "steak", "bbq", "mac and cheese"],
-    "mediterranean": ["mediterranean", "hummus", "falafel", "gyro", "tzatziki"]
-}
-
-PRICE_KEYWORDS = {
-    "budget": ["cheap", "budget", "affordable", "inexpensive", "economical"],
-    "moderate": ["moderate", "mid-range", "reasonable"],
-    "expensive": ["expensive", "nice", "fancy", "pricey"],
-    "fine_dining": ["fine dining", "expensive", "luxurious", "gourmet", "high-end"]
-}
-
-AMBIANCE_KEYWORDS = {
-    "romantic": ["romantic", "date night", "intimate", "cozy"],
-    "casual": ["casual", "relaxed", "laid back", "informal"],
-    "expensive": ["expensive", "elegant", "sophisticated", "classy"],
-    "family_friendly": ["family", "kids", "children", "family-friendly"],
-    "business": ["business", "professional", "meeting", "corporate"],
-    "trendy": ["trendy", "hip", "modern", "fashionable"],
-    "quiet": ["quiet", "peaceful", "calm", "tranquil"],
-    "lively": ["lively", "energetic", "vibrant", "bustling"]
-}
-
-FEATURE_KEYWORDS = {
-    "outdoor_seating": ["outdoor", "patio", "terrace", "sidewalk", "garden"],
-    "live_music": ["live music", "band", "jazz", "acoustic", "entertainment"],
-    "parking": ["parking", "valet", "garage"],
-    "delivery": ["delivery", "takeout", "take out", "to go"],
-    "reservations": ["reservations", "booking", "reserve"],
-    "wifi": ["wifi", "internet", "wireless"],
-    "wheelchair_accessible": ["wheelchair", "accessible", "handicap"]
-}
-
 # =============================================================================
 # ERROR MESSAGES
 # =============================================================================

@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import logging
 
 from .base_node import BaseNode
@@ -9,7 +9,6 @@ from ...models.query import ParsedQuery, QueryType, LocationPreference, TimePref
 from ...models.restaurant import RestaurantCategory, PriceLevel
 from ...models.user import DietaryRestriction, AmbiancePreference
 from ...models.common import Urgency, DistancePreference
-from ...config.constants import CUISINE_KEYWORDS, PRICE_KEYWORDS, AMBIANCE_KEYWORDS, FEATURE_KEYWORDS
 
 import traceback
 
@@ -23,42 +22,30 @@ logger = logging.getLogger(__name__)
 
 
 class QueryParserNode(BaseNode):
-    """Parses natural language restaurant queries into structured format"""
+    """100% LLM-based query parser - NO hard-coded keywords"""
 
     def __init__(self, openai_client: OpenAIClient):
         super().__init__("query_parser")
         self.openai_client = openai_client
 
     async def execute(self, state: RecommendationState) -> Dict[str, Any]:
-        """Parse user query into structured ParsedQuery object"""
+        """Parse user query using pure LLM understanding"""
 
         user_query = state.get("user_query", "")
         if not user_query:
             return self._handle_error(state, "No user query provided", is_fatal=True)
 
         try:
-            print(f"DEBUG: Starting to parse query: '{user_query}'")
+            print(f"DEBUG: Starting LLM-based parsing for: '{user_query}'")
 
-            # First try rule-based parsing for simple queries
-            print("DEBUG: About to call _try_rule_based_parsing")
-            parsed_query = await self._try_rule_based_parsing(user_query)
-            print(f"DEBUG: Rule-based parsing completed. Query type: {parsed_query.query_type}")
+            # Pure LLM parsing - no rule-based fallback
+            parsed_query = await self._llm_only_parsing(user_query)
 
-            # If rule-based parsing is insufficient, use LLM
-            if parsed_query.confidence < 0.7 or parsed_query.query_type == QueryType.GENERAL:
-                print("DEBUG: About to call _llm_enhanced_parsing")
-                parsed_query = await self._llm_enhanced_parsing(user_query, parsed_query)
-                print("DEBUG: LLM parsing completed")
+            print(f"DEBUG: LLM parsing completed with confidence: {parsed_query.confidence}")
 
-            # Calculate complexity score
-            print("DEBUG: About to calculate complexity_score")
-            complexity_score = parsed_query.complexity_score
-            print(f"DEBUG: Complexity score: {complexity_score}")
-
-            # Determine if smart reasoning is needed
-            print("DEBUG: About to check requires_smart_reasoning")
-            should_use_smart_reasoning = parsed_query.requires_smart_reasoning
-            print(f"DEBUG: Smart reasoning needed: {should_use_smart_reasoning}")
+            # Calculate complexity and reasoning needs
+            complexity_score = self._calculate_complexity_score(parsed_query)
+            should_use_smart_reasoning = complexity_score > 0.7 or parsed_query.confidence < 0.6
 
             logger.info(f"Parsed query: {parsed_query.query_type} (confidence: {parsed_query.confidence:.2f})")
 
@@ -66,339 +53,318 @@ class QueryParserNode(BaseNode):
                 "parsed_query": parsed_query,
                 "complexity_score": complexity_score,
                 "should_use_smart_reasoning": should_use_smart_reasoning,
-                **self._update_performance_tracking(state, tokens_used=0)
+                **self._update_performance_tracking(state, tokens_used=150)  # Estimate
             }
 
-
-
         except Exception as e:
-
-            debug_log_error(e, "execute method")
-
-            logger.error(f"Query parsing failed: {e}")
-
+            logger.error(f"LLM query parsing failed: {e}")
             return self._handle_error(state, f"Failed to parse query: {str(e)}", is_fatal=True)
 
-    async def _try_rule_based_parsing(self, query: str) -> ParsedQuery:
-        """Attempt to parse query using rule-based approach"""
+    async def _llm_only_parsing(self, user_query: str) -> ParsedQuery:
+        """Pure LLM parsing with comprehensive understanding"""
 
-        query_lower = query.lower()
+        system_prompt = """You are an expert restaurant query parser. Analyze the user's request and extract ALL relevant information.
 
-        # Initialize parsed query
-        parsed_query = ParsedQuery(
-            original_query=query,
-            query_type=QueryType.GENERAL,
-            confidence=0.5
-        )
+Think step-by-step:
+1. What is their PRIMARY intent?
+2. What specific preferences did they mention?
+3. What context clues can you detect?
+4. What's most important to them?
 
-        # Extract cuisines
-        cuisines = []
-        for cuisine, keywords in CUISINE_KEYWORDS.items():
-            if any(keyword in query_lower for keyword in keywords):
-                try:
-                    # Map cuisine string to enum
-                    cuisine_mapping = {
-                        "italian": RestaurantCategory.ITALIAN,
-                        "chinese": RestaurantCategory.CHINESE,
-                        "japanese": RestaurantCategory.JAPANESE,
-                        "mexican": RestaurantCategory.MEXICAN,
-                        "thai": RestaurantCategory.THAI,
-                        "indian": RestaurantCategory.INDIAN,
-                        "french": RestaurantCategory.FRENCH,
-                        "american": RestaurantCategory.AMERICAN,
-                        "mediterranean": RestaurantCategory.MEDITERRANEAN
-                    }
-                    cuisine_enum = cuisine_mapping.get(cuisine.lower())
-                    if cuisine_enum:
-                        cuisines.append(cuisine_enum)
-                except (ValueError, AttributeError):
-                    continue
+Extract this information and return ONLY valid JSON:
 
-        if cuisines:
-            parsed_query.cuisine_preferences = cuisines
-            parsed_query.query_type = QueryType.CUISINE_SPECIFIC
-            parsed_query.confidence = 0.8
+{
+  "query_type": "cuisine_specific|location_based|occasion_based|feature_based|price_based|time_based|mood_based|social_based|dietary_based|experience_based|general",
+  "confidence": 0.0-1.0,
 
-        # Extract price preferences
-        price_level = None
-        for price, keywords in PRICE_KEYWORDS.items():
-            if any(keyword in query_lower for keyword in keywords):
-                try:
-                    # Map price keywords to enum values
-                    price_mapping = {
-                        "budget": PriceLevel.INEXPENSIVE,
-                        "moderate": PriceLevel.MODERATE,
-                        "expensive": PriceLevel.EXPENSIVE,
-                        "fine_dining": PriceLevel.VERY_EXPENSIVE
-                    }
-                    price_level = price_mapping.get(price)
-                    if price_level:
-                        break
-                except (KeyError, ValueError):
-                    continue
+  "cuisines": ["italian", "mexican", "chinese", "japanese", "thai", "indian", "american", "french", "mediterranean", "korean", "vietnamese", "pizza", "sushi", "seafood", "steakhouse", "cafe", "bar", "bakery"],
 
-        if price_level:
-            parsed_query.price_preferences = [price_level]
-            if parsed_query.query_type == QueryType.GENERAL:
-                parsed_query.query_type = QueryType.PRICE_BASED
-                parsed_query.confidence = 0.7
+  "price_preferences": ["budget", "moderate", "expensive", "fine_dining"],
 
-        # Extract ambiance preferences
-        ambiance_prefs = []
-        for ambiance, keywords in AMBIANCE_KEYWORDS.items():
-            if any(keyword in query_lower for keyword in keywords):
-                try:
-                    ambiance_prefs.append(AmbiancePreference(ambiance))
-                except ValueError:
-                    continue
+  "dietary_restrictions": ["vegetarian", "vegan", "gluten_free", "dairy_free", "nut_free", "halal", "kosher", "keto", "paleo"],
 
-        if ambiance_prefs:
-            parsed_query.ambiance_preferences = ambiance_prefs
-            if parsed_query.query_type == QueryType.GENERAL:
-                parsed_query.query_type = QueryType.MOOD_BASED
-                parsed_query.confidence = 0.6
+  "ambiance": ["romantic", "casual", "family_friendly", "business", "trendy", "quiet", "lively", "cozy", "outdoor"],
 
-        # Extract features
-        features = []
-        for feature, keywords in FEATURE_KEYWORDS.items():
-            if any(keyword in query_lower for keyword in keywords):
-                features.append(feature)
+  "required_features": ["outdoor_seating", "live_music", "parking", "delivery", "reservations", "wifi", "wheelchair_accessible"],
 
-        if features:
-            parsed_query.required_features = features
-            if parsed_query.query_type == QueryType.GENERAL:
-                parsed_query.query_type = QueryType.FEATURE_BASED
-                parsed_query.confidence = 0.7
+  "location_info": {
+    "max_distance_km": 10.0,
+    "distance_preference": "walking|nearby|city_wide|no_preference",
+    "specific_areas": ["neighborhood1", "neighborhood2"]
+  },
 
-        # Extract party size
-        import re
-        party_size_match = re.search(r'(\d+)\s*(people|person|ppl)', query_lower)
-        if party_size_match:
-            party_size = int(party_size_match.group(1))
-            parsed_query.social_context.party_size = min(max(party_size, 1), 20)
+  "time_context": {
+    "urgency": "now|soon|today|this_week|planning",
+    "meal_type": "breakfast|brunch|lunch|dinner|late_night",
+    "flexible": true
+  },
 
-        # Extract urgency
-        if any(word in query_lower for word in ["now", "asap", "immediately"]):
-            parsed_query.time_preference.urgency = Urgency.NOW
-        elif any(word in query_lower for word in ["tonight", "today"]):
-            parsed_query.time_preference.urgency = Urgency.SOON
+  "social_context": {
+    "party_size": 2,
+    "occasion": "date|business|family|celebration|casual",
+    "companion_types": ["family", "friends", "business", "romantic"]
+  },
 
-        # Location indicators
-        if any(word in query_lower for word in ["near", "nearby", "close", "around"]):
-            parsed_query.query_type = QueryType.LOCATION_BASED
-            parsed_query.location_preference.distance_preference = DistancePreference.NEARBY
+  "quality_preferences": {
+    "min_rating": 0.0,
+    "prefer_popular": false,
+    "prefer_hidden_gems": false
+  }
+}
 
-        return parsed_query
+Use null for any information not mentioned. Be precise and confident."""
 
-    async def _llm_enhanced_parsing(self, query: str, initial_parse: ParsedQuery) -> ParsedQuery:
-        """Use LLM to enhance parsing with more sophisticated understanding"""
+        user_message = f"Parse this restaurant query: '{user_query}'"
 
-        system_prompt = """You are an expert at parsing restaurant search queries. Extract structured information and return valid JSON.
+        response = await self.openai_client.chat_completion([
+            ChatMessage(role="system", content=system_prompt),
+            ChatMessage(role="user", content=user_message)
+        ], max_tokens=600, temperature=0.1)
 
-Analyze the user's restaurant query and extract:
-1. Query type (cuisine_specific, location_based, occasion_based, feature_based, price_based, time_based, mood_based, social_based, dietary_based, experience_based, general)
-2. Cuisine preferences (italian, chinese, japanese, mexican, thai, indian, french, american, mediterranean, korean, vietnamese, greek, spanish, middle_eastern, pizza, sushi, bbq, seafood, steakhouse, vegetarian, vegan, fast_food, casual_dining, fine_dining, cafe, bar, bakery)
-3. Price range (budget, moderate, expensive, fine_dining)
-4. Party size (number)
-5. Dietary restrictions (vegetarian, vegan, gluten_free, dairy_free, nut_free, halal, kosher, keto, paleo, low_carb, low_sodium)
-6. Ambiance preferences (romantic, casual, expensive, family_friendly, business, trendy, quiet, lively, cozy, outdoor, authentic, modern, traditional)
-7. Required features (outdoor_seating, live_music, parking, delivery, reservations, wifi, wheelchair_accessible)
-8. Urgency (now, soon, today, this_week, planning)
-9. Distance preference (walking, nearby, city_wide, no_preference)
-10. Special occasion or context
-
-Return ONLY valid JSON with these exact field names. Use null for missing values."""
-
-        user_prompt = f"""Query: "{query}"
-
-Current rule-based parse found:
-- Query type: {initial_parse.query_type.value}
-- Cuisines: {[c.value for c in initial_parse.cuisine_preferences]}
-- Price: {[p.value for p in initial_parse.price_preferences]}
-- Features: {initial_parse.required_features}
-- Party size: {initial_parse.social_context.party_size}
-
-Please provide enhanced parsing as JSON:"""
+        if not response.success:
+            # Fallback to basic parsing
+            return self._create_fallback_parsed_query(user_query)
 
         try:
-            messages = [
-                ChatMessage(role="system", content=system_prompt),
-                ChatMessage(role="user", content=user_prompt)
-            ]
+            llm_data = json.loads(response.data.content)
+            return self._convert_llm_data_to_parsed_query(user_query, llm_data)
 
-            response = await self.openai_client.chat_completion(
-                messages=messages,
-                model=self.settings.llm.models["query_parser"],
-                temperature=self.settings.llm.temperature["query_parser"],
-                max_tokens=500
+        except json.JSONDecodeError:
+            print(f"DEBUG: JSON decode failed, using fallback for: {user_query}")
+            return self._create_fallback_parsed_query(user_query)
+
+    def _convert_llm_data_to_parsed_query(self, user_query: str, llm_data: Dict) -> ParsedQuery:
+        """Convert LLM JSON response to ParsedQuery object"""
+
+        # Map query type
+        query_type = self._map_to_query_type(llm_data.get("query_type", "general"))
+
+        # Map cuisines to enums
+        cuisines = []
+        for cuisine in llm_data.get("cuisines", []):
+            if cuisine:
+                mapped_cuisine = self._map_to_cuisine_enum(cuisine)
+                if mapped_cuisine:
+                    cuisines.append(mapped_cuisine)
+
+        # Map price preferences
+        price_levels = []
+        for price in llm_data.get("price_preferences", []):
+            if price:
+                mapped_price = self._map_to_price_enum(price)
+                if mapped_price:
+                    price_levels.append(mapped_price)
+
+        # Map dietary restrictions
+        dietary_restrictions = []
+        for dietary in llm_data.get("dietary_restrictions", []):
+            if dietary:
+                mapped_dietary = self._map_to_dietary_enum(dietary)
+                if mapped_dietary:
+                    dietary_restrictions.append(mapped_dietary)
+
+        # Map ambiance preferences
+        ambiance_prefs = []
+        for ambiance in llm_data.get("ambiance", []):
+            if ambiance:
+                mapped_ambiance = self._map_to_ambiance_enum(ambiance)
+                if mapped_ambiance:
+                    ambiance_prefs.append(mapped_ambiance)
+
+        # Extract location preference
+        location_info = llm_data.get("location_info", {})
+        location_pref = LocationPreference(
+            max_distance_km=location_info.get("max_distance_km", 10.0),
+            distance_preference=self._map_to_distance_preference(
+                location_info.get("distance_preference", "nearby")
             )
-
-            if not response.success:
-                logger.warning(f"LLM parsing failed: {response.error}")
-                return initial_parse
-
-            # Parse LLM response
-            try:
-                llm_data = json.loads(response.data.content)
-                enhanced_query = self._merge_parsing_results(initial_parse, llm_data)
-                enhanced_query.confidence = 0.9  # High confidence from LLM
-
-                # Update performance tracking
-                self.tokens_used = response.data.tokens_used
-
-                return enhanced_query
-
-            except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse LLM JSON response: {e}")
-                return initial_parse
-
-        except Exception as e:
-            logger.error(f"LLM enhanced parsing failed: {e}")
-            return initial_parse
-
-    def _merge_parsing_results(self, initial_parse: ParsedQuery, llm_data: Dict[str, Any]) -> ParsedQuery:
-        """Merge rule-based and LLM parsing results"""
-
-        # Start with initial parse
-        merged = ParsedQuery(
-            original_query=initial_parse.original_query,
-            query_type=initial_parse.query_type,
-            cuisine_preferences=initial_parse.cuisine_preferences.copy(),
-            price_preferences=initial_parse.price_preferences.copy(),
-            dietary_requirements=initial_parse.dietary_requirements.copy(),
-            ambiance_preferences=initial_parse.ambiance_preferences.copy(),
-            required_features=initial_parse.required_features.copy(),
-            location_preference=initial_parse.location_preference,
-            time_preference=initial_parse.time_preference,
-            social_context=initial_parse.social_context
         )
 
-        # Update with LLM enhancements
-        if llm_data.get("query_type"):
-            try:
-                query_type_val = llm_data["query_type"]
-                if isinstance(query_type_val, str):
-                    merged.query_type = QueryType(query_type_val)
-                else:
-                    merged.query_type = query_type_val
-            except (ValueError, TypeError):
-                pass
+        # Extract time preference
+        time_info = llm_data.get("time_context", {})
+        time_pref = TimePreference(
+            urgency=self._map_to_urgency(time_info.get("urgency", "planning")),
+            meal_type=time_info.get("meal_type"),
+            flexible_timing=time_info.get("flexible", True)
+        )
 
-        if llm_data.get("cuisines"):
-            llm_cuisines = []
-            for cuisine in llm_data["cuisines"]:
-                try:
-                    if isinstance(cuisine, str):
-                        llm_cuisines.append(RestaurantCategory(cuisine))
-                    elif hasattr(cuisine, 'value'):
-                        llm_cuisines.append(cuisine)
-                    else:
-                        llm_cuisines.append(RestaurantCategory(cuisine))
-                except (ValueError, TypeError):
-                    continue
-            # Merge with existing cuisines
-            existing_cuisine_values = {c.value for c in merged.cuisine_preferences}
-            for cuisine in llm_cuisines:
-                if cuisine.value not in existing_cuisine_values:
-                    merged.cuisine_preferences.append(cuisine)
+        # Extract social context
+        social_info = llm_data.get("social_context", {})
+        social_context = SocialContext(
+            party_size=social_info.get("party_size", 2),
+            occasion=social_info.get("occasion"),
+            companion_types=social_info.get("companion_types", [])
+        )
 
-        if llm_data.get("price_range"):
-            try:
-                price_val = llm_data["price_range"]
-                if isinstance(price_val, str):
-                    # Map string to enum
-                    price_mapping = {
-                        "budget": PriceLevel.INEXPENSIVE,
-                        "moderate": PriceLevel.MODERATE,
-                        "expensive": PriceLevel.EXPENSIVE,
-                        "fine_dining": PriceLevel.VERY_EXPENSIVE
-                    }
-                    price_level = price_mapping.get(price_val, PriceLevel.MODERATE)
-                else:
-                    price_level = PriceLevel(price_val)
+        # Extract quality preferences
+        quality_info = llm_data.get("quality_preferences", {})
+        min_rating = quality_info.get("min_rating", 0.0)
+        prefer_popular = quality_info.get("prefer_popular", False)
+        prefer_hidden_gems = quality_info.get("prefer_hidden_gems", False)
 
-                if price_level not in merged.price_preferences:
-                    merged.price_preferences.append(price_level)
-            except (ValueError, TypeError):
-                pass
+        return ParsedQuery(
+            original_query=user_query,
+            query_type=query_type,
+            confidence=llm_data.get("confidence", 0.7),
+            cuisine_preferences=cuisines,
+            price_preferences=price_levels,
+            dietary_requirements=dietary_restrictions,
+            ambiance_preferences=ambiance_prefs,
+            location_preference=location_pref,
+            time_preference=time_pref,
+            social_context=social_context,
+            required_features=llm_data.get("required_features", []),
+            min_rating=min_rating,
+            prefer_popular=prefer_popular,
+            prefer_hidden_gems=prefer_hidden_gems,
+            max_results=10
+        )
 
-        if llm_data.get("party_size") and isinstance(llm_data["party_size"], int):
-            merged.social_context.party_size = min(max(llm_data["party_size"], 1), 20)
+    def _create_fallback_parsed_query(self, user_query: str) -> ParsedQuery:
+        """Create basic fallback when LLM fails"""
 
-        if llm_data.get("dietary_restrictions"):
-            llm_dietary = []
-            for restriction in llm_data["dietary_restrictions"]:
-                try:
-                    llm_dietary.append(DietaryRestriction(restriction))
-                except ValueError:
-                    continue
-            existing_dietary = {d.value for d in merged.dietary_requirements}
-            for dietary in llm_dietary:
-                if dietary.value not in existing_dietary:
-                    merged.dietary_requirements.append(dietary)
-
-        if llm_data.get("ambiance_preferences"):
-            llm_ambiance = []
-            for ambiance in llm_data["ambiance_preferences"]:
-                try:
-                    llm_ambiance.append(AmbiancePreference(ambiance))
-                except ValueError:
-                    continue
-            existing_ambiance = {a.value for a in merged.ambiance_preferences}
-            for ambiance in llm_ambiance:
-                if ambiance.value not in existing_ambiance:
-                    merged.ambiance_preferences.append(ambiance)
-
-        if llm_data.get("required_features"):
-            merged.required_features = list(set(merged.required_features + llm_data["required_features"]))
-
-        if llm_data.get("urgency"):
-            try:
-                merged.time_preference.urgency = Urgency(llm_data["urgency"])
-            except ValueError:
-                pass
-
-        if llm_data.get("distance_preference"):
-            try:
-                merged.location_preference.distance_preference = DistancePreference(llm_data["distance_preference"])
-            except ValueError:
-                pass
-
-        # Extract occasion if mentioned
-        if llm_data.get("occasion"):
-            merged.social_context.occasion = llm_data["occasion"]
-
-        return merged
-
-async def test_basic_parsing():
-    """Test basic parsing without LLM"""
-    try:
-        print("Testing basic ParsedQuery creation...")
-
-        # Test basic ParsedQuery creation
-        test_query = ParsedQuery(
-            original_query="test query",
+        return ParsedQuery(
+            original_query=user_query,
             query_type=QueryType.GENERAL,
-            confidence=0.5
+            confidence=0.5,
+            cuisine_preferences=[],
+            price_preferences=[],
+            dietary_requirements=[],
+            ambiance_preferences=[],
+            location_preference=LocationPreference(),
+            time_preference=TimePreference(),
+            social_context=SocialContext(),
+            required_features=[],
+            min_rating=0.0,
+            max_results=10
         )
-        print(f"Basic ParsedQuery created successfully: {test_query.query_type.value}")
 
-        # Test complexity score
-        print("Testing complexity score...")
-        complexity = test_query.complexity_score
-        print(f"Complexity score: {complexity}")
+    # Mapping helper methods
+    def _map_to_query_type(self, query_type_str: str) -> QueryType:
+        """Map string to QueryType enum"""
+        mapping = {
+            "cuisine_specific": QueryType.CUISINE_SPECIFIC,
+            "location_based": QueryType.LOCATION_BASED,
+            "occasion_based": QueryType.OCCASION_BASED,
+            "feature_based": QueryType.FEATURE_BASED,
+            "price_based": QueryType.PRICE_BASED,
+            "time_based": QueryType.TIME_BASED,
+            "mood_based": QueryType.MOOD_BASED,
+            "social_based": QueryType.SOCIAL_BASED,
+            "dietary_based": QueryType.DIETARY_BASED,
+            "experience_based": QueryType.EXPERIENCE_BASED,
+            "general": QueryType.GENERAL
+        }
+        return mapping.get(query_type_str, QueryType.GENERAL)
 
-        # Test requires_smart_reasoning
-        print("Testing smart reasoning...")
-        smart_reasoning = test_query.requires_smart_reasoning
-        print(f"Smart reasoning: {smart_reasoning}")
+    def _map_to_cuisine_enum(self, cuisine_str: str) -> Optional[RestaurantCategory]:
+        """Map string to RestaurantCategory enum"""
+        cuisine_mapping = {
+            "italian": RestaurantCategory.ITALIAN,
+            "mexican": RestaurantCategory.MEXICAN,
+            "chinese": RestaurantCategory.CHINESE,
+            "japanese": RestaurantCategory.JAPANESE,
+            "thai": RestaurantCategory.THAI,
+            "indian": RestaurantCategory.INDIAN,
+            "american": RestaurantCategory.AMERICAN,
+            "french": RestaurantCategory.FRENCH,
+            "mediterranean": RestaurantCategory.MEDITERRANEAN,
+            "korean": RestaurantCategory.KOREAN,
+            "vietnamese": RestaurantCategory.VIETNAMESE,
+            "pizza": RestaurantCategory.PIZZA,
+            "sushi": RestaurantCategory.SUSHI,
+            "seafood": RestaurantCategory.SEAFOOD,
+            "steakhouse": RestaurantCategory.STEAKHOUSE,
+            "cafe": RestaurantCategory.CAFE,
+            "bar": RestaurantCategory.BAR,
+            "bakery": RestaurantCategory.BAKERY
+        }
+        return cuisine_mapping.get(cuisine_str.lower())
 
-        print("All basic tests passed!")
+    def _map_to_price_enum(self, price_str: str) -> Optional[PriceLevel]:
+        """Map string to PriceLevel enum"""
+        price_mapping = {
+            "budget": PriceLevel.INEXPENSIVE,
+            "moderate": PriceLevel.MODERATE,
+            "expensive": PriceLevel.EXPENSIVE,
+            "fine_dining": PriceLevel.VERY_EXPENSIVE
+        }
+        return price_mapping.get(price_str.lower())
 
-    except Exception as e:
-        print(f"Test failed: {e}")
-        traceback.print_exc()
+    def _map_to_dietary_enum(self, dietary_str: str) -> Optional[DietaryRestriction]:
+        """Map string to DietaryRestriction enum"""
+        dietary_mapping = {
+            "vegetarian": DietaryRestriction.VEGETARIAN,
+            "vegan": DietaryRestriction.VEGAN,
+            "gluten_free": DietaryRestriction.GLUTEN_FREE,
+            "dairy_free": DietaryRestriction.DAIRY_FREE,
+            "nut_free": DietaryRestriction.NUT_FREE,
+            "halal": DietaryRestriction.HALAL,
+            "kosher": DietaryRestriction.KOSHER,
+            "keto": DietaryRestriction.KETO,
+            "paleo": DietaryRestriction.PALEO
+        }
+        return dietary_mapping.get(dietary_str.lower())
 
-if __name__ == "__main__":
-    import asyncio
-    asyncio.run(test_basic_parsing())
+    def _map_to_ambiance_enum(self, ambiance_str: str) -> Optional[AmbiancePreference]:
+        """Map string to AmbiancePreference enum"""
+        ambiance_mapping = {
+            "romantic": AmbiancePreference.ROMANTIC,
+            "casual": AmbiancePreference.CASUAL,
+            "family_friendly": AmbiancePreference.FAMILY_FRIENDLY,
+            "business": AmbiancePreference.BUSINESS,
+            "trendy": AmbiancePreference.TRENDY,
+            "quiet": AmbiancePreference.QUIET,
+            "lively": AmbiancePreference.LIVELY,
+            "cozy": AmbiancePreference.COZY,
+            "outdoor": AmbiancePreference.OUTDOOR
+        }
+        return ambiance_mapping.get(ambiance_str.lower())
+
+    def _map_to_distance_preference(self, distance_str: str) -> DistancePreference:
+        """Map string to DistancePreference enum"""
+        distance_mapping = {
+            "walking": DistancePreference.WALKING,
+            "nearby": DistancePreference.NEARBY,
+            "city_wide": DistancePreference.CITY_WIDE,
+            "no_preference": DistancePreference.NO_PREFERENCE
+        }
+        return distance_mapping.get(distance_str.lower(), DistancePreference.NEARBY)
+
+    def _map_to_urgency(self, urgency_str: str) -> Urgency:
+        """Map string to Urgency enum"""
+        urgency_mapping = {
+            "now": Urgency.NOW,
+            "soon": Urgency.SOON,
+            "today": Urgency.TODAY,
+            "this_week": Urgency.THIS_WEEK,
+            "planning": Urgency.PLANNING
+        }
+        return urgency_mapping.get(urgency_str.lower(), Urgency.PLANNING)
+
+    def _calculate_complexity_score(self, parsed_query: ParsedQuery) -> float:
+        """Calculate query complexity for routing decisions"""
+
+        complexity = 0.0
+
+        # Multiple cuisines increase complexity
+        complexity += len(parsed_query.cuisine_preferences) * 0.1
+
+        # Dietary restrictions add complexity
+        complexity += len(parsed_query.dietary_requirements) * 0.15
+
+        # Multiple ambiance preferences
+        complexity += len(parsed_query.ambiance_preferences) * 0.1
+
+        # Required features add complexity
+        complexity += len(parsed_query.required_features) * 0.1
+
+        # Low confidence increases complexity
+        if parsed_query.confidence < 0.7:
+            complexity += 0.3
+
+        # Urgent queries are more complex
+        if parsed_query.time_preference.urgency in [Urgency.NOW, Urgency.SOON]:
+            complexity += 0.2
+
+        return min(complexity, 1.0)
