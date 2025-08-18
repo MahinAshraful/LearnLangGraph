@@ -298,25 +298,35 @@ class RestaurantRecommendationWorkflow:
             node.error_count = 0
 
 
-async def create_restaurant_recommendation_workflow(
-        openai_api_key: str,
-        use_mock_services: bool = False,
-        cache_adapter=None
-) -> RestaurantRecommendationWorkflow:
-    """Factory function to create and initialize the workflow"""
+async def create_restaurant_recommendation_workflow(openai_api_key: str,
+                                                    use_mock_services: bool = False,
+                                                    cache_adapter=None) -> RestaurantRecommendationWorkflow:
+    """Create and initialize the restaurant recommendation workflow with LLM-powered places client"""
 
     # Initialize OpenAI client
-    openai_client = OpenAIClient(api_key=openai_api_key, cache_adapter=cache_adapter)
-
-    # Initialize Places client (Foursquare, Google, or Mock)
-    from ...infrastructure.api_clients.places_factory import PlacesClientFactory
-
-    if use_mock_services:
-        places_client = PlacesClientFactory.create_client("mock", cache_adapter=cache_adapter)
+    if use_mock_services or not openai_api_key or openai_api_key == "fake_key_for_testing":
+        from ...infrastructure.api_clients.openai.client import OpenAIClient
+        openai_client = OpenAIClient(cache_adapter=cache_adapter, use_mock=True)
+        print("DEBUG WORKFLOW: Using mock OpenAI client")
     else:
-        places_client = PlacesClientFactory.create_client("auto", cache_adapter=cache_adapter)
+        from ...infrastructure.api_clients.openai.client import OpenAIClient
+        openai_client = OpenAIClient(api_key=openai_api_key, cache_adapter=cache_adapter)
+        print("DEBUG WORKFLOW: Using real OpenAI client")
 
-    # Initialize Vector DB (mock for MVP)
+    # Initialize Places client with OpenAI client for LLM cuisine classification
+    if use_mock_services:
+        places_client = PlacesClientFactory.create_client(
+            "mock",
+            cache_adapter=cache_adapter,
+            openai_client=openai_client  # 🤖 Pass OpenAI client!
+        )
+    else:
+        places_client = PlacesClientFactory.create_client(
+            "auto",
+            cache_adapter=cache_adapter,
+            openai_client=openai_client  # 🤖 Pass OpenAI client!
+        )
+
     # Initialize Vector DB (mock for MVP)
     if use_mock_services:
         from ...infrastructure.databases.vector_db.mock_adapter import MockVectorAdapter
@@ -334,14 +344,14 @@ async def create_restaurant_recommendation_workflow(
     # Connect to services
     await vector_db.connect()
 
-    # Create workflow
+    # Create workflow with LLM-enabled places client
     workflow = RestaurantRecommendationWorkflow(
         openai_client=openai_client,
-        places_client=places_client,  # Keep same parameter name for now
+        places_client=places_client,  # Now has LLM cuisine classification!
         vector_db=vector_db
     )
 
-    logger.info("Restaurant recommendation workflow created and initialized")
+    logger.info("Restaurant recommendation workflow created with LLM cuisine classification")
     return workflow
 
 
